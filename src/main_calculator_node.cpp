@@ -80,7 +80,7 @@ public:
 private:
   void control_step()
   {
-    if (!errors_received_ || !joystick_received_) {
+    if (!errors_received_) {
       publish_twist(0.0, 0.0, 0.0);
       return;
     }
@@ -90,6 +90,13 @@ private:
     std_msgs::msg::Float64 target_roll;
     target_roll.data = phi_com_y;
     target_roll_pub_->publish(target_roll);
+
+    // DummyJoystickはこのメッセージを受けてJoystick状態を返すため、
+    // 最初の周期ではJoystick受信を待たずにU_comを送信する。
+    if (!joystick_received_) {
+      publish_twist(0.0, 0.0, 0.0);
+      return;
+    }
 
     // DummyJoystickまたは実JoystickのpotBから人間操作量を復元する。
     // 既存系の符号規約は変更せず、現在のmainの定義を維持する。

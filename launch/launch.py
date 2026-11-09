@@ -1,13 +1,23 @@
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument
+from launch.conditions import IfCondition
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
 def generate_launch_description():
     # コマンドライン引数の宣言
-    output_dir_arg = DeclareLaunchArgument('output_dir', default_value='/home/hurolab/Programs/colcon_ws/data/datafiles', description='CSV出力ディレクトリ')
+    output_dir_arg = DeclareLaunchArgument(
+        'output_dir',
+        default_value='/home/hurolab/Programs/hsc_rls_pram_ws/data/datafiles',
+        description='CSV出力ディレクトリ',
+    )
     steps_arg = DeclareLaunchArgument('steps', default_value='10000', description='総シミュレーションステップ数')
     k2_arg = DeclareLaunchArgument('k_2', default_value='0.5', description='制御パラメータ k2')
     k3_arg = DeclareLaunchArgument('k_3', default_value='-0.3', description='制御パラメータ k3')
+    use_moza_arg = DeclareLaunchArgument(
+        'use_moza',
+        default_value='false',
+        description='MOZAのJoystick/FFBノードを起動するか',
+    )
 
     # メイン計算ノードの設定
     main_calculator_node = Node(
@@ -49,14 +59,16 @@ def generate_launch_description():
             'max_angle_rad': 1.5707963267948966,
             'publish_rate_hz': 100.0
         }],
-        output='screen'
+        output='screen',
+        condition=IfCondition(LaunchConfiguration('use_moza'))
     )
 
     moza_ffb_node = Node(
     package='res-hr-simulate-hsc-ros2-unity',
     executable='moza_ffb_node',
     name='moza_ffb_node',
-    output='screen'
+    output='screen',
+    condition=IfCondition(LaunchConfiguration('use_moza'))
     )
 
     return LaunchDescription([
@@ -64,6 +76,7 @@ def generate_launch_description():
         steps_arg,
         k2_arg,
         k3_arg,
+        use_moza_arg,
         main_calculator_node,
         csv_logger_node,
         moza_joystick_bridge_node,
