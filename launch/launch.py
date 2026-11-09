@@ -95,7 +95,7 @@ def generate_launch_description():
         executable='moza_joystick_bridge_node',
         name='moza_joystick_bridge_node',
         parameters=[{
-            'device': '/dev/input/event17',
+            'device': '/dev/input/event16',
             'axis_center': 32767.5,
             'axis_scale': 32767.5,
             'deadzone': 0.02,

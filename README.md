@@ -220,5 +220,16 @@ ref_K2_K3.csv
 ref_2.0_5.0.csv
 ```
 
+入力CSVを省略して実行した場合は、既定で
+`data/ref_2.0_1.0.csv`を読み込みます。別のデータを使う場合は、
+`--input-csv`で指定してください。
+
+```bash
+python3 scripts/ols_parameter_identification.py \
+  --input-csv data/ref_10.0_5.0.csv
+```
+
 ファイル名から正解パラメータを取得し、推定値・誤差・RMSE・
 各サンプルの予測値を、実行時刻付きのCSVへ保存します。
+ファイル名が`ref_K2_K3.csv`形式でない場合も、正解パラメータの比較だけを
+スキップして、推定値とRMSEを計算します。

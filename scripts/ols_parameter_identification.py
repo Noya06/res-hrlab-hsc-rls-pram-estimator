@@ -22,7 +22,7 @@ import numpy as np
 # コードから使用する入力CSVを変更する場合は、このファイル名を変更する。
 # __file__基準にすることで、実行時のカレントディレクトリに依存しない。
 DEFAULT_INPUT_CSV = (
-    Path(__file__).resolve().parents[3] / "data" / "ref_10.0_1.0.csv"
+    Path(__file__).resolve().parents[3] / "data" / "ref_10.0_5.0.csv"
 )
 
 
@@ -78,20 +78,16 @@ def read_error_csv(path: Path) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.n
     return values[:, 0], values[:, 1], values[:, 2], values[:, 3]
 
 
-def read_true_parameters_from_filename(path: Path) -> tuple[float, float]:
-    """Extract k2 and k3 from a filename in the form ref_K2_K3.csv."""
+def read_true_parameters_from_filename(path: Path) -> tuple[float, float] | None:
+    """Extract k2 and k3, or return None for an unrelated filename."""
     match = re.fullmatch(r"ref_([^_]+)_([^_]+)\.csv", path.name)
     if match is None:
-        raise ValueError(
-            f"CSVファイル名は ref_K2_K3.csv の形式にしてください: {path.name}"
-        )
+        return None
 
     try:
         return float(match.group(1)), float(match.group(2))
-    except ValueError as error:
-        raise ValueError(
-            f"CSVファイル名から正解パラメータを数値として読み取れません: {path.name}"
-        ) from error
+    except ValueError:
+        return None
 
 
 def generate_demo_errors(steps: int) -> tuple[np.ndarray, np.ndarray]:
@@ -114,8 +110,8 @@ def solve_ols(design_matrix: np.ndarray, target: np.ndarray) -> np.ndarray:
 def write_result_csv(
     path: Path,
     source: Path,
-    k2_true: float,
-    k3_true: float,
+    k2_true: float | None,
+    k3_true: float | None,
     k2_hat: float,
     k3_hat: float,
     e2: np.ndarray,
@@ -130,12 +126,20 @@ def write_result_csv(
     with path.open("w", newline="", encoding="utf-8") as file:
         writer = csv.writer(file)
         writer.writerow(["# source_csv", str(source)])
-        writer.writerow(["# k2_true", f"{k2_true:.12g}"])
-        writer.writerow(["# k3_true", f"{k3_true:.12g}"])
+        writer.writerow(
+            ["# k2_true", f"{k2_true:.12g}" if k2_true is not None else "unavailable"]
+        )
+        writer.writerow(
+            ["# k3_true", f"{k3_true:.12g}" if k3_true is not None else "unavailable"]
+        )
         writer.writerow(["# k2_estimated", f"{k2_hat:.12g}"])
         writer.writerow(["# k3_estimated", f"{k3_hat:.12g}"])
-        writer.writerow(["# k2_error", f"{k2_hat - k2_true:.12g}"])
-        writer.writerow(["# k3_error", f"{k3_hat - k3_true:.12g}"])
+        writer.writerow(
+            ["# k2_error", f"{k2_hat - k2_true:.12g}" if k2_true is not None else "unavailable"]
+        )
+        writer.writerow(
+            ["# k3_error", f"{k3_hat - k3_true:.12g}" if k3_true is not None else "unavailable"]
+        )
         writer.writerow(["# rmse", f"{rmse:.12g}"])
         writer.writerow([])
         writer.writerow(
@@ -204,7 +208,15 @@ def main() -> None:
 
     e2, e3, u_hsc, _ = read_error_csv(args.input_csv)
     source = str(args.input_csv)
-    k2_true, k3_true = read_true_parameters_from_filename(args.input_csv)
+    true_parameters = read_true_parameters_from_filename(args.input_csv)
+    if true_parameters is None:
+        k2_true = k3_true = None
+        print(
+            "警告: ファイル名から正解パラメータを読み取れないため、"
+            "推定とRMSEのみを実行します。"
+        )
+    else:
+        k2_true, k3_true = true_parameters
     output_csv = args.output_csv
     if output_csv is None:
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
@@ -218,8 +230,6 @@ def main() -> None:
     design_matrix = np.column_stack((e2, e3))
     theta_hat = solve_ols(design_matrix, y)
     prediction = design_matrix @ theta_hat
-    errors = theta_hat - np.array([k2_true, k3_true])
-
     write_result_csv(
         output_csv,
         args.input_csv,
@@ -237,8 +247,18 @@ def main() -> None:
 
     print(f"データソース: {source}")
     print(f"サンプル数 N: {len(y)}")
-    print(f"k2_true = {k2_true:.12g}, k2_hat = {theta_hat[0]:.12g}, 誤差 = {errors[0]:.3e}")
-    print(f"k3_true = {k3_true:.12g}, k3_hat = {theta_hat[1]:.12g}, 誤差 = {errors[1]:.3e}")
+    if k2_true is not None and k3_true is not None:
+        print(
+            f"k2_true = {k2_true:.12g}, k2_hat = {theta_hat[0]:.12g}, "
+            f"誤差 = {theta_hat[0] - k2_true:.3e}"
+        )
+        print(
+            f"k3_true = {k3_true:.12g}, k3_hat = {theta_hat[1]:.12g}, "
+            f"誤差 = {theta_hat[1] - k3_true:.3e}"
+        )
+    else:
+        print(f"k2_hat = {theta_hat[0]:.12g}")
+        print(f"k3_hat = {theta_hat[1]:.12g}")
     print(f"RMSE(phi_com_y - prediction): {np.sqrt(np.mean((y - prediction) ** 2)):.3e}")
     print(f"生成結果CSV: {output_csv}")
     if args.plot is not None:
