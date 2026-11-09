@@ -21,11 +21,12 @@ public:
     declare_parameter<double>("k_v", 1.0);
     declare_parameter<double>("k_w", 1.0);
     declare_parameter<double>("forward_speed", 1.0);
-    declare_parameter<double>("linear_x_sign", 1.0);
     declare_parameter<double>("center_B", 512.0);
-    declare_parameter<double>("max_deviation_B", 100.0);
-    declare_parameter<double>("max_roll_rad", 0.5);
+    declare_parameter<double>("max_deviation_B", 512.0);
+    declare_parameter<double>("max_roll_rad", 1.0);
     declare_parameter<bool>("use_path_tracking", true);
+    declare_parameter<bool>("override_constant_forward_speed", true);
+    declare_parameter<bool>("invert_steering", true);
 
     get_parameter("dt", dt_);
     get_parameter("k_2", k_2_);
@@ -33,11 +34,12 @@ public:
     get_parameter("k_v", k_v_);
     get_parameter("k_w", k_w_);
     get_parameter("forward_speed", forward_speed_);
-    get_parameter("linear_x_sign", linear_x_sign_);
     get_parameter("center_B", center_b_);
     get_parameter("max_deviation_B", max_deviation_b_);
     get_parameter("max_roll_rad", max_roll_rad_);
     get_parameter("use_path_tracking", use_path_tracking_);
+    get_parameter("override_constant_forward_speed", override_constant_forward_speed_);
+    get_parameter("invert_steering", invert_steering_);
 
     target_roll_pub_ =
       create_publisher<std_msgs::msg::Float64>("/joystick/target_roll", 10);
@@ -79,8 +81,8 @@ public:
 
     RCLCPP_INFO(
       get_logger(),
-      "HSC制御ノードを起動しました: k2=%.6f, k3=%.6f, %.1f Hz",
-      k_2_, k_3_, 1.0 / dt_);
+      "HSC制御ノードを起動しました: k2=%.6f, k3=%.6f, %.1f Hz, fixed_speed=%s",
+      k_2_, k_3_, 1.0 / dt_, override_constant_forward_speed_ ? "true" : "false");
   }
 
 private:
@@ -97,21 +99,19 @@ private:
     target_roll.data = phi_com_y;
     target_roll_pub_->publish(target_roll);
 
-    // ジョイスティック操舵モードでは入力を受信するまで停止する。
-    // 経路追従モードはジョイスティック入力に依存しない。
-    if (!use_path_tracking_ && !joystick_received_) {
+    // 可変のジョイスティック前後速度を使う場合だけ、入力受信まで停止する。
+    // 固定速度モードでは、操舵入力が未受信でも前後速度を直ちに送信する。
+    if (!use_path_tracking_ && !override_constant_forward_speed_ && !joystick_received_) {
       publish_twist(0.0, 0.0, 0.0);
       return;
     }
 
     // DummyJoystickまたは実JoystickのpotBから人間操作量を復元する。
     const double phi_hum_y =
+      (invert_steering_ ? -1.0 : 1.0) *
       std::clamp((pot_b_ - center_b_) / max_deviation_b_, -1.0, 1.0) * max_roll_rad_;
-    const double forward_input =
-      std::clamp((pot_a_ - 512.0) / 512.0, -1.0, 1.0);
-    const double joystick_v_xi = k_v_ * forward_input;
-    const double v_xi = linear_x_sign_ *
-      (use_path_tracking_ ? forward_speed_ : joystick_v_xi);
+    constexpr double kJoystickForwardSpeed = 1.0;
+    const double v_xi = use_path_tracking_ ? forward_speed_ : kJoystickForwardSpeed;
     const double steering_input = use_path_tracking_ ? phi_com_y : phi_hum_y;
     const double omega = k_w_ * steering_input;
 
@@ -148,11 +148,12 @@ private:
   double k_v_ = 1.0;
   double k_w_ = 1.0;
   double forward_speed_ = 1.0;
-  double linear_x_sign_ = 1.0;
   double center_b_ = 512.0;
   double max_deviation_b_ = 100.0;
-  double max_roll_rad_ = 0.5;
+  double max_roll_rad_ = 1.0;
   bool use_path_tracking_ = true;
+  bool override_constant_forward_speed_ = true;
+  bool invert_steering_ = true;
 
   double e2_ = 0.0;
   double e3_ = 0.0;

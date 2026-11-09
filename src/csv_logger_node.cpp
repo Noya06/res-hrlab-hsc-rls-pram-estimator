@@ -30,6 +30,10 @@ public:
       "/joystick/calc_results", 10,
       std::bind(&CsvLoggerNode::calc_results_callback, this, std::placeholders::_1));
 
+    state_sub_ = this->create_subscription<std_msgs::msg::Float64MultiArray>(
+      "/real_robot_hum/state", 10,
+      std::bind(&CsvLoggerNode::state_callback, this, std::placeholders::_1));
+
     // CSV保存トリガーの購読
     save_trigger_sub_ = this->create_subscription<std_msgs::msg::Bool>(
       "/optimization/save_csv_trigger", 10,
@@ -98,6 +102,9 @@ private:
     row.phi_com_y = msg->data[5];
     row.phi_hum_y = msg->data[6];
     row.y_difference = row.phi_hum_y - row.phi_com_y;
+    row.position_x = position_x_;
+    row.position_z = position_z_;
+    row.yaw = yaw_;
 
     records_.push_back(row);
     step_count_++;
@@ -105,6 +112,21 @@ private:
     if (step_count_ >= max_steps_) {
       publish_simulation_done();
     }
+  }
+
+  void state_callback(const std_msgs::msg::Float64MultiArray::SharedPtr msg)
+  {
+    if (msg->data.size() < 3) {
+      RCLCPP_WARN_ONCE(
+        this->get_logger(),
+        "/real_robot_hum/stateには位置x、位置z、yawが必要です。");
+      return;
+    }
+
+    position_x_ = msg->data[0];
+    position_z_ = msg->data[1];
+    yaw_ = msg->data[2];
+    state_received_ = true;
   }
 
   void save_trigger_callback(const std_msgs::msg::Bool::SharedPtr msg)
@@ -162,12 +184,14 @@ private:
     file << "# steps: " << max_steps_ << "\n";
     file << "# output_dir: " << output_dir_ << "\n";
     file << "# -----------------------------\n";
-    file << "time,e_2,e_3,v_r,v_xi,phi_com_y,phi_hum_y,y_difference\n";
+    file << "time,e_2,e_3,v_r,v_xi,phi_com_y,phi_hum_y,y_difference,"
+            "position_x,position_z,yaw\n";
 
     for (const auto& r : records_) {
       file << r.time << "," << r.e_2 << "," << r.e_3 << "," << r.v_r << "," << r.v_xi
            << "," << r.phi_com_y << "," << r.phi_hum_y
-           << "," << r.y_difference << "\n";
+           << "," << r.y_difference << "," << r.position_x << "," << r.position_z
+           << "," << r.yaw << "\n";
     }
     
     file.close();
@@ -211,9 +235,11 @@ private:
 
   struct CsvRow {
     double time, e_2, e_3, v_r, v_xi, phi_com_y, phi_hum_y, y_difference;
+    double position_x, position_z, yaw;
   };
 
   rclcpp::Subscription<std_msgs::msg::Float64MultiArray>::SharedPtr calc_result_sub_;
+  rclcpp::Subscription<std_msgs::msg::Float64MultiArray>::SharedPtr state_sub_;
   rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr save_trigger_sub_;
   rclcpp::Subscription<std_msgs::msg::Float64MultiArray>::SharedPtr rho_cmd_sub_;
   rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr sim_done_sub_;
@@ -226,6 +252,10 @@ private:
   bool simulation_done_published_ = false;
   bool csv_saved_published_ = false;
   bool pending_reset_ = false;
+  bool state_received_ = false;
+  double position_x_ = 0.0;
+  double position_z_ = 0.0;
+  double yaw_ = 0.0;
   std::vector<CsvRow> records_;
 };
 
