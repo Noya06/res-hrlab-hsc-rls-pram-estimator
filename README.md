@@ -295,16 +295,20 @@ joystickのevent番号、.cと.pyと.
 ## OLSパラメータ同定の検証
 
 CSV loggerはROS2の同じ制御サンプルについて、`e2`、`e3`、`phi_com_y`、
-`phi_hum_y`を保存します。Pythonは記録済みの値から`y = phi_hum_y - phi_com_y`
-を計算し、OLSで`k2`と`k3`を推定します。
+`phi_hum_y`を保存します。Pythonは記録済みの`phi_com_y`を目的変数として、
+OLSで`k2`と`k3`を推定します。
 検証スクリプトは[`scripts/ols_parameter_identification.py`](scripts/ols_parameter_identification.py)です。
 
 ```bash
 python3 scripts/ols_parameter_identification.py \
-  --input-csv /path/to/ros2_result.csv \
-  --output-csv data/ols_identification.csv \
-  --plot data/ols_fit.png
+  --input-csv /path/to/ref_K2_K3.csv
 ```
+
+`--output-csv`を省略すると、入力CSVと実行時刻から
+`ref_K2_K3_parameter_prediction_YYYYMMDD_HHMMSS_microseconds.csv`という
+一意な結果ファイルを入力CSVと同じディレクトリに生成します。
+結果ファイルには正解パラメータ、推定パラメータ、誤差、RMSE、
+各サンプルの実測値・予測値・残差が含まれます。
 
 ROS2を起動してUnityでDummyJoystickを有効にした後、保存されたCSVを処理します。
 
@@ -316,7 +320,7 @@ ros2 launch res-hr-simulate-hsc-ros2-unity launch.py \
 
 入力CSVはUnityから受信したe2/e3をROS2が処理したログであり、
 `e_2,e_3,phi_com_y,phi_hum_y,y_difference`を含みます。
-`--input-csv`を省略すると、スクリプト単体の動作確認用にデモデータを生成します。
+入力CSVのファイル名は`ref_K2_K3.csv`形式で、ファイル名から正解パラメータを取得します。
 
 シミュレーション時にはjoystickは抜いておき、csの方で時間スケールを5.0fに
 unity上でチェックを2つ入れ

@@ -11,8 +11,8 @@ def generate_launch_description():
         description='CSV出力ディレクトリ',
     )
     steps_arg = DeclareLaunchArgument('steps', default_value='10000', description='総シミュレーションステップ数')
-    k2_arg = DeclareLaunchArgument('k_2', default_value='0.5', description='制御パラメータ k2')
-    k3_arg = DeclareLaunchArgument('k_3', default_value='-0.3', description='制御パラメータ k3')
+    k2_arg = DeclareLaunchArgument('k_2', default_value='2.0', description='制御パラメータ k2')
+    k3_arg = DeclareLaunchArgument('k_3', default_value='5.0', description='制御パラメータ k3')
     forward_speed_arg = DeclareLaunchArgument(
         'forward_speed',
         default_value='1.0',

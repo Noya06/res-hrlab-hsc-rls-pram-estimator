@@ -1,20 +1,29 @@
 #!/usr/bin/env python3
-"""Generate validation data and identify k2, k3 with batch least squares.
+"""Identify configured k2 and k3 with batch least squares.
 
-The Unity simulation supplies e2 and e3.  This script then applies the
-known human-operation model
+The ROS2 controller calculates
 
-    U_hum = U_hsc + k2_true * e2 + k3_true * e3
+    phi_com_y = k2 * e2 + k3 * e3
 
-and estimates [k2, k3] from y = U_hum - U_hsc.
+and this script estimates [k2, k3] directly from the recorded
+``phi_com_y`` column.
 """
 
 from __future__ import annotations
 
 import argparse
 import csv
+from datetime import datetime
 from pathlib import Path
+import re
 import numpy as np
+
+
+# コードから使用する入力CSVを変更する場合は、このファイル名を変更する。
+# __file__基準にすることで、実行時のカレントディレクトリに依存しない。
+DEFAULT_INPUT_CSV = (
+    Path(__file__).resolve().parents[3] / "data" / "ref_10.0_1.0.csv"
+)
 
 
 def read_error_csv(path: Path) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
@@ -69,6 +78,22 @@ def read_error_csv(path: Path) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.n
     return values[:, 0], values[:, 1], values[:, 2], values[:, 3]
 
 
+def read_true_parameters_from_filename(path: Path) -> tuple[float, float]:
+    """Extract k2 and k3 from a filename in the form ref_K2_K3.csv."""
+    match = re.fullmatch(r"ref_([^_]+)_([^_]+)\.csv", path.name)
+    if match is None:
+        raise ValueError(
+            f"CSVファイル名は ref_K2_K3.csv の形式にしてください: {path.name}"
+        )
+
+    try:
+        return float(match.group(1)), float(match.group(2))
+    except ValueError as error:
+        raise ValueError(
+            f"CSVファイル名から正解パラメータを数値として読み取れません: {path.name}"
+        ) from error
+
+
 def generate_demo_errors(steps: int) -> tuple[np.ndarray, np.ndarray]:
     """Create independent, sufficiently varying errors for local verification."""
     time = np.arange(1, steps + 1, dtype=float)
@@ -86,22 +111,39 @@ def solve_ols(design_matrix: np.ndarray, target: np.ndarray) -> np.ndarray:
     return np.linalg.solve(normal_matrix, design_matrix.T @ target)
 
 
-def write_generated_csv(
+def write_result_csv(
     path: Path,
+    source: Path,
+    k2_true: float,
+    k3_true: float,
+    k2_hat: float,
+    k3_hat: float,
     e2: np.ndarray,
     e3: np.ndarray,
-    e1: np.ndarray,
-    u_hsc: np.ndarray,
-    u_hum: np.ndarray,
-    y: np.ndarray,
+    observed: np.ndarray,
     prediction: np.ndarray,
 ) -> None:
-    """Persist the complete X/Y data used by the OLS verification."""
+    """Write the final parameter estimates and per-sample predictions."""
     path.parent.mkdir(parents=True, exist_ok=True)
+    residual = observed - prediction
+    rmse = np.sqrt(np.mean(residual ** 2))
     with path.open("w", newline="", encoding="utf-8") as file:
         writer = csv.writer(file)
-        writer.writerow(["step", "e1", "e2", "e3", "U_hsc", "U_hum", "y", "y_prediction"])
-        for step, values in enumerate(zip(e1, e2, e3, u_hsc, u_hum, y, prediction), start=1):
+        writer.writerow(["# source_csv", str(source)])
+        writer.writerow(["# k2_true", f"{k2_true:.12g}"])
+        writer.writerow(["# k3_true", f"{k3_true:.12g}"])
+        writer.writerow(["# k2_estimated", f"{k2_hat:.12g}"])
+        writer.writerow(["# k3_estimated", f"{k3_hat:.12g}"])
+        writer.writerow(["# k2_error", f"{k2_hat - k2_true:.12g}"])
+        writer.writerow(["# k3_error", f"{k3_hat - k3_true:.12g}"])
+        writer.writerow(["# rmse", f"{rmse:.12g}"])
+        writer.writerow([])
+        writer.writerow(
+            ["step", "e2", "e3", "phi_com_y_observed", "phi_com_y_predicted", "residual"]
+        )
+        for step, values in enumerate(
+            zip(e2, e3, observed, prediction, residual), start=1
+        ):
             writer.writerow([step, *[f"{value:.12g}" for value in values]])
 
 
@@ -131,17 +173,21 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--input-csv",
         type=Path,
-        help="ROS2 loggerが出力したe2/e3/phi_com_y/phi_hum_y CSV。省略時はデモデータを生成します。",
+        default=DEFAULT_INPUT_CSV,
+        help=(
+            "ROS2 loggerが出力したe2/e3/phi_com_y/phi_hum_y CSV。"
+            f"既定値: {DEFAULT_INPUT_CSV}"
+        ),
     )
     parser.add_argument("--steps", type=int, default=500, help="デモデータのステップ数")
     parser.add_argument("--kp", type=float, default=1.0, help="P制御ゲイン Kp")
-    parser.add_argument("--k2-true", type=float, default=0.5, help="正解パラメータ k2*")
-    parser.add_argument("--k3-true", type=float, default=-0.3, help="正解パラメータ k3*")
     parser.add_argument(
         "--output-csv",
         type=Path,
-        default=Path("data/ols_identification.csv"),
-        help="生成したX/Yと予測値の出力先",
+        help=(
+            "最終的な推定パラメータと予測値の出力先。"
+            "省略時は入力CSVと実行時刻から自動生成します。"
+        ),
     )
     parser.add_argument(
         "--plot",
@@ -156,37 +202,45 @@ def main() -> None:
     if args.steps <= 0:
         raise ValueError("--stepsは正の整数で指定してください。")
 
-    if args.input_csv is None:
-        e2, e3 = generate_demo_errors(args.steps)
-        source = "デモ生成"
-    else:
-        e2, e3, u_hsc, u_hum = read_error_csv(args.input_csv)
-        source = str(args.input_csv)
-
-    if args.input_csv is None:
-        e1 = np.zeros_like(e2)
-        u_hsc = args.kp * e1
-        u_hum = u_hsc + args.k2_true * e2 + args.k3_true * e3
-    else:
-        # ROS2側で計算・記録したU_hsc/U_humを使い、PythonではOLSだけを行う。
-        e1 = np.zeros_like(e2)
-    y = u_hum - u_hsc
+    e2, e3, u_hsc, _ = read_error_csv(args.input_csv)
+    source = str(args.input_csv)
+    k2_true, k3_true = read_true_parameters_from_filename(args.input_csv)
+    output_csv = args.output_csv
+    if output_csv is None:
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
+        output_csv = (
+            args.input_csv.parent
+            / f"{args.input_csv.stem}_parameter_prediction_{timestamp}.csv"
+        )
+    # 設定された制御ゲインを検証するため、phi_com_yを目的変数にする。
+    y = u_hsc
 
     design_matrix = np.column_stack((e2, e3))
     theta_hat = solve_ols(design_matrix, y)
     prediction = design_matrix @ theta_hat
-    errors = theta_hat - np.array([args.k2_true, args.k3_true])
+    errors = theta_hat - np.array([k2_true, k3_true])
 
-    write_generated_csv(args.output_csv, e2, e3, e1, u_hsc, u_hum, y, prediction)
+    write_result_csv(
+        output_csv,
+        args.input_csv,
+        k2_true,
+        k3_true,
+        theta_hat[0],
+        theta_hat[1],
+        e2,
+        e3,
+        y,
+        prediction,
+    )
     if args.plot is not None:
         plot_fit(y, prediction, args.plot)
 
     print(f"データソース: {source}")
     print(f"サンプル数 N: {len(y)}")
-    print(f"k2_true = {args.k2_true:.12g}, k2_hat = {theta_hat[0]:.12g}, 誤差 = {errors[0]:.3e}")
-    print(f"k3_true = {args.k3_true:.12g}, k3_hat = {theta_hat[1]:.12g}, 誤差 = {errors[1]:.3e}")
-    print(f"RMSE(y - y_hat): {np.sqrt(np.mean((y - prediction) ** 2)):.3e}")
-    print(f"生成データCSV: {args.output_csv}")
+    print(f"k2_true = {k2_true:.12g}, k2_hat = {theta_hat[0]:.12g}, 誤差 = {errors[0]:.3e}")
+    print(f"k3_true = {k3_true:.12g}, k3_hat = {theta_hat[1]:.12g}, 誤差 = {errors[1]:.3e}")
+    print(f"RMSE(phi_com_y - prediction): {np.sqrt(np.mean((y - prediction) ** 2)):.3e}")
+    print(f"生成結果CSV: {output_csv}")
     if args.plot is not None:
         print(f"フィッティンググラフ: {args.plot}")
 
