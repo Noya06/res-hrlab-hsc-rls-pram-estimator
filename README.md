@@ -70,23 +70,19 @@ ros2 topic echo /joystick/calc_results
 ```
 必要に応じて Joystick / Arduino 側の入力が ROS に届いていることを確認する。
 
-### RLSによる k_2, k_3 の逐次推定
+### HSC制御と実測データの記録
 
-`main_calculator_node` は `/rls/input` の `std_msgs/msg/Float64MultiArray` を購読します。
-配列は `[e_2, e_3, U_num, U_hsc]` の順序で指定してください。受信するたびに、
-忘却係数 `lambda=0.98`、初期共分散 `gamma=1000` の RLS 更新を行い、推定した
-`k_2`, `k_3` を制御計算へ反映します。
+`main_calculator_node`はUnityの`/target/robot_errors`から`e2,e3`を受信し、
+次の機械制御量を計算して`/joystick/target_roll`へ送信します。
 
-```bash
-ros2 topic pub --once /rls/input std_msgs/msg/Float64MultiArray \
-  "{data: [1.0, 0.0, 2.0, 0.0]}"
+```text
+U_com = phi_com_y = k2 * e2 + k3 * e3
 ```
 
-エピソードのリセット時には、パラメータ推定値を `[0, 0]^T`、共分散行列を
-`diag(1000, 1000)` に戻します。
-
-### 8. 最適化モードを実行する
-MATLAB では、bayesopt の探索を起動する。環境にインストール済みの MATLAB は `/home/hurolab/MATLAB/bin/matlab` で起動できる。
+Unityの`DummyJoystickPublisher`を有効にすると、この値を人間が操作していない
+Joystick入力として`/joystick/joystick_state`へ返します。MOZAを使う場合は従来どおり
+`moza_joystick_bridge_node`を使用できます。ROS2はJoystick値から`phi_hum_y`を計算し、
+`/real_robot_hum/twist`としてUnityへ送信します。
 
 ```bash
 export PATH="/home/hurolab/MATLAB/bin:$PATH"
@@ -288,6 +284,32 @@ unity上にてevaluationModeのチェックとDummyJoystickのチェックを外
 ターミナル2つで上記2種類のコマンドを実行
 main_calcにて    this->declare_parameter<bool>("use_csv_errors", false);に
 joystickのevent番号、.cと.pyと.
+
+## OLSパラメータ同定の検証
+
+CSV loggerはROS2の同じ制御サンプルについて、`e2`、`e3`、`phi_com_y`、
+`phi_hum_y`を保存します。Pythonは記録済みの値から`y = phi_hum_y - phi_com_y`
+を計算し、OLSで`k2`と`k3`を推定します。
+検証スクリプトは[`scripts/ols_parameter_identification.py`](scripts/ols_parameter_identification.py)です。
+
+```bash
+python3 scripts/ols_parameter_identification.py \
+  --input-csv /path/to/ros2_result.csv \
+  --output-csv data/ols_identification.csv \
+  --plot data/ols_fit.png
+```
+
+ROS2を起動してUnityでDummyJoystickを有効にした後、保存されたCSVを処理します。
+
+```bash
+ros2 launch res-hr-simulate-hsc-ros2-unity launch.py \
+  k_2:=0.5 k_3:=-0.3 \
+  output_dir:=/path/to/data
+```
+
+入力CSVはUnityから受信したe2/e3をROS2が処理したログであり、
+`e_2,e_3,phi_com_y,phi_hum_y,y_difference`を含みます。
+`--input-csv`を省略すると、スクリプト単体の動作確認用にデモデータを生成します。
 
 シミュレーション時にはjoystickは抜いておき、csの方で時間スケールを5.0fに
 unity上でチェックを2つ入れ

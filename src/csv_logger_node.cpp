@@ -87,21 +87,17 @@ private:
       return;
     }
 
-    if (msg->data.size() < 12) return;
+    if (msg->data.size() < 7) return;
 
     CsvRow row;
     row.time      = msg->data[0];
-    row.x         = msg->data[1];
-    row.y         = msg->data[2];
-    row.theta     = msg->data[3];
-    row.e_2       = msg->data[4];
-    row.e_3       = msg->data[5];
-    row.v_r       = msg->data[6];
-    row.v_xi      = msg->data[7];
-    row.v_eta     = msg->data[8];
-    row.u         = msg->data[9];
-    row.phi_com_y = msg->data[10];
-    row.phi_hum_y = msg->data[11];
+    row.e_2       = msg->data[1];
+    row.e_3       = msg->data[2];
+    row.v_r       = msg->data[3];
+    row.v_xi      = msg->data[4];
+    row.phi_com_y = msg->data[5];
+    row.phi_hum_y = msg->data[6];
+    row.y_difference = row.phi_hum_y - row.phi_com_y;
 
     records_.push_back(row);
     step_count_++;
@@ -166,12 +162,12 @@ private:
     file << "# steps: " << max_steps_ << "\n";
     file << "# output_dir: " << output_dir_ << "\n";
     file << "# -----------------------------\n";
-    file << "time,x,y,theta,e_2,e_3,v_r,v_xi,v_eta,u,phi_com_y,phi_hum_y\n";
+    file << "time,e_2,e_3,v_r,v_xi,phi_com_y,phi_hum_y,y_difference\n";
 
     for (const auto& r : records_) {
-      file << r.time << "," << r.x << "," << r.y << "," << r.theta << ","
-           << r.e_2 << "," << r.e_3 << "," << r.v_r << "," << r.v_xi << ","
-           << r.v_eta << "," << r.u << "," << r.phi_com_y << "," << r.phi_hum_y << "\n";
+      file << r.time << "," << r.e_2 << "," << r.e_3 << "," << r.v_r << "," << r.v_xi
+           << "," << r.phi_com_y << "," << r.phi_hum_y
+           << "," << r.y_difference << "\n";
     }
     
     file.close();
@@ -214,7 +210,7 @@ private:
   }
 
   struct CsvRow {
-    double time, x, y, theta, e_2, e_3, v_r, v_xi, v_eta, u, phi_com_y, phi_hum_y;
+    double time, e_2, e_3, v_r, v_xi, phi_com_y, phi_hum_y, y_difference;
   };
 
   rclcpp::Subscription<std_msgs::msg::Float64MultiArray>::SharedPtr calc_result_sub_;

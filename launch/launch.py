@@ -1,14 +1,13 @@
-import os
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
-from ament_index_python.packages import get_package_share_directory
-
 def generate_launch_description():
     # コマンドライン引数の宣言
     output_dir_arg = DeclareLaunchArgument('output_dir', default_value='/home/hurolab/Programs/colcon_ws/data/datafiles', description='CSV出力ディレクトリ')
     steps_arg = DeclareLaunchArgument('steps', default_value='10000', description='総シミュレーションステップ数')
+    k2_arg = DeclareLaunchArgument('k_2', default_value='0.5', description='制御パラメータ k2')
+    k3_arg = DeclareLaunchArgument('k_3', default_value='-0.3', description='制御パラメータ k3')
 
     # メイン計算ノードの設定
     main_calculator_node = Node(
@@ -16,16 +15,11 @@ def generate_launch_description():
         executable='main_calculator_node',
         name='main_calculator_node',
         parameters=[{
-            'x0': 0.0,
-            'y0': -1.0,
-            'theta0_deg': 0.0,
             'dt': 0.01,
-            'alpha': 0.5,
-            'k_2': 60.0,
-            'k_3': 10.0,
-            'c_0': 0.0,
+            'k_2': LaunchConfiguration('k_2'),
+            'k_3': LaunchConfiguration('k_3'),
             'k_v': 1.0,
-            'k_w': 1.0
+            'k_w': 1.0,
         }],
         output='screen'
     )
@@ -39,13 +33,6 @@ def generate_launch_description():
             'steps': LaunchConfiguration('steps'),
             'output_dir': LaunchConfiguration('output_dir')
         }],
-        output='screen'
-    )
-
-    optimization_bridge_node = Node(
-        package='res-hr-simulate-hsc-ros2-unity',
-        executable='optimization_bridge_node',
-        name='optimization_bridge_node',
         output='screen'
     )
 
@@ -75,9 +62,10 @@ def generate_launch_description():
     return LaunchDescription([
         output_dir_arg,
         steps_arg,
+        k2_arg,
+        k3_arg,
         main_calculator_node,
         csv_logger_node,
-        optimization_bridge_node,
         moza_joystick_bridge_node,
         moza_ffb_node
     ])

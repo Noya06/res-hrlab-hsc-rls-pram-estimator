@@ -12,8 +12,6 @@ find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(std_msgs REQUIRED)
 find_package(geometry_msgs REQUIRED)
-find_package(rcl_interfaces REQUIRED)
-find_package(serial REQUIRED)
 
 # ------------------------------------------------------------------------------
 # 2. 実行可能ファイル（Executable）のビルド設定
@@ -25,7 +23,6 @@ ament_target_dependencies(main_calculator_node
   rclcpp
   std_msgs
   geometry_msgs
-  rcl_interfaces
 )
 
 # CSVログ記録ノード
@@ -42,23 +39,6 @@ ament_target_dependencies(moza_joystick_bridge_node
   std_msgs
 )
 
-# Joystick シリアル通信ブリッジノード
-add_executable(joystick_serial_bridge_node src/joystick_serial_bridge_node.cpp)
-ament_target_dependencies(joystick_serial_bridge_node
-  rclcpp
-  std_msgs
-  serial
-)
-
-# 最適化パラメータブリッジノード
-add_executable(optimization_bridge_node src/optimization_bridge_node.cpp)
-ament_target_dependencies(optimization_bridge_node
-  rclcpp
-  std_msgs
-  rcl_interfaces
-)
-
-
 # ------------------------------------------------------------------------------
 # 3. インストール設定 (ros2 run / ros2 launch で参照できるように配置)
 # ------------------------------------------------------------------------------
@@ -68,8 +48,6 @@ install(TARGETS
   main_calculator_node
   csv_logger_node
   moza_joystick_bridge_node
-  joystick_serial_bridge_node
-  optimization_bridge_node
   DESTINATION lib/${PROJECT_NAME}
 )
 
@@ -79,7 +57,7 @@ install(DIRECTORY launch
   OPTIONAL
 )
 
-# scripts ディレクトリ（eval_rho.py 等）のインストール (存在する場合)
+# OLS検証スクリプトのインストール (存在する場合)
 install(DIRECTORY scripts
   DESTINATION share/${PROJECT_NAME}/
   USE_SOURCE_PERMISSIONS
