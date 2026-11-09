@@ -20,18 +20,24 @@ public:
     declare_parameter<double>("k_3", -0.3);
     declare_parameter<double>("k_v", 1.0);
     declare_parameter<double>("k_w", 1.0);
+    declare_parameter<double>("forward_speed", 1.0);
+    declare_parameter<double>("linear_x_sign", 1.0);
     declare_parameter<double>("center_B", 512.0);
     declare_parameter<double>("max_deviation_B", 100.0);
     declare_parameter<double>("max_roll_rad", 0.5);
+    declare_parameter<bool>("use_path_tracking", true);
 
     get_parameter("dt", dt_);
     get_parameter("k_2", k_2_);
     get_parameter("k_3", k_3_);
     get_parameter("k_v", k_v_);
     get_parameter("k_w", k_w_);
+    get_parameter("forward_speed", forward_speed_);
+    get_parameter("linear_x_sign", linear_x_sign_);
     get_parameter("center_B", center_b_);
     get_parameter("max_deviation_B", max_deviation_b_);
     get_parameter("max_roll_rad", max_roll_rad_);
+    get_parameter("use_path_tracking", use_path_tracking_);
 
     target_roll_pub_ =
       create_publisher<std_msgs::msg::Float64>("/joystick/target_roll", 10);
@@ -91,23 +97,25 @@ private:
     target_roll.data = phi_com_y;
     target_roll_pub_->publish(target_roll);
 
-    // DummyJoystickはこのメッセージを受けてJoystick状態を返すため、
-    // 最初の周期ではJoystick受信を待たずにU_comを送信する。
-    if (!joystick_received_) {
+    // ジョイスティック操舵モードでは入力を受信するまで停止する。
+    // 経路追従モードはジョイスティック入力に依存しない。
+    if (!use_path_tracking_ && !joystick_received_) {
       publish_twist(0.0, 0.0, 0.0);
       return;
     }
 
     // DummyJoystickまたは実JoystickのpotBから人間操作量を復元する。
-    // 既存系の符号規約は変更せず、現在のmainの定義を維持する。
     const double phi_hum_y =
       std::clamp((pot_b_ - center_b_) / max_deviation_b_, -1.0, 1.0) * max_roll_rad_;
     const double forward_input =
       std::clamp((pot_a_ - 512.0) / 512.0, -1.0, 1.0);
-    const double v_xi = k_v_ * forward_input;
-    const double omega = k_w_ * phi_hum_y;
+    const double joystick_v_xi = k_v_ * forward_input;
+    const double v_xi = linear_x_sign_ *
+      (use_path_tracking_ ? forward_speed_ : joystick_v_xi);
+    const double steering_input = use_path_tracking_ ? phi_com_y : phi_hum_y;
+    const double omega = k_w_ * steering_input;
 
-    // Unity上の人間操作後ロボットへ、実際に得られたU_humで送信する。
+    // 経路追従モードではU_com、ジョイスティック操舵モードではU_humを送信する。
     publish_twist(v_xi, 0.0, omega);
 
     // e2,e3,U_com,U_humを同一サンプルとしてCSV loggerへ渡す。
@@ -139,9 +147,12 @@ private:
   double k_3_ = -0.3;
   double k_v_ = 1.0;
   double k_w_ = 1.0;
+  double forward_speed_ = 1.0;
+  double linear_x_sign_ = 1.0;
   double center_b_ = 512.0;
   double max_deviation_b_ = 100.0;
   double max_roll_rad_ = 0.5;
+  bool use_path_tracking_ = true;
 
   double e2_ = 0.0;
   double e3_ = 0.0;

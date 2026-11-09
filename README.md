@@ -84,6 +84,13 @@ Joystick入力として`/joystick/joystick_state`へ返します。MOZAを使う
 `moza_joystick_bridge_node`を使用できます。ROS2はJoystick値から`phi_hum_y`を計算し、
 `/real_robot_hum/twist`としてUnityへ送信します。
 
+経路追従を行う場合は、起動時の`use_path_tracking`（既定値`true`）により、
+`k_2 * e2 + k_3 * e3`を`Twist.angular.z`へ直接使用します。
+ジョイスティック操舵へ戻す場合は、`use_path_tracking:=false`を指定します。
+経路追従時の前進速度は`forward_speed`（既定値`1.0`）です。
+Unity側の座標変換で前後が逆になる場合は、`linear_x_sign:=-1.0`で
+`Twist.linear.x`の符号を反転できます。
+
 ```bash
 export PATH="/home/hurolab/MATLAB/bin:$PATH"
 cd /home/hurolab/Programs/colcon_ws
