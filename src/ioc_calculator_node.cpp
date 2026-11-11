@@ -10,7 +10,6 @@
 
 #include <rclcpp/rclcpp.hpp>
 #include <rcl_interfaces/msg/set_parameters_result.hpp>
-#include <std_msgs/msg/bool.hpp>
 #include <std_msgs/msg/float64.hpp>
 #include <std_msgs/msg/float64_multi_array.hpp>
 #include <geometry_msgs/msg/twist.hpp>
@@ -35,11 +34,10 @@ public:
     this->declare_parameter<double>("k_v", 1.0);
     this->declare_parameter<double>("k_w", 1.0);
     this->declare_parameter<double>("rho", 0.0);
-    this->declare_parameter<int>("max_steps", 1000); // 1エピソードの最大ステップ数
     this->declare_parameter<bool>("publish_control_output", true);
 
     // CSV参照エラー使用モード用のパラメータ宣言
-    this->declare_parameter<bool>("use_csv_errors", true);
+    this->declare_parameter<bool>("use_csv_errors", false);
     this->declare_parameter<std::string>("human_csv_path", "/home/hurolab/Programs/colcon_ws/data/ref_60.0_10.0_0.5.csv");
 
     this->get_parameter("alpha", alpha_);
@@ -50,7 +48,6 @@ public:
     this->get_parameter("k_v", k_v_);
     this->get_parameter("k_w", k_w_);
     this->get_parameter("rho", rho_);
-    this->get_parameter("max_steps", max_steps_);
     this->get_parameter("publish_control_output", publish_control_output_);
 
     this->get_parameter("x0", x0_);
@@ -96,8 +93,6 @@ public:
             k_w_ = param.as_double();
           } else if (param.get_name() == "rho") {
             rho_ = param.as_double();
-          } else if (param.get_name() == "max_steps") {
-            max_steps_ = param.as_int();
           } else if (param.get_name() == "use_csv_errors") {
             use_csv_errors_ = param.as_bool();
             csv_updated = true;
@@ -118,15 +113,12 @@ public:
         return result;
       });
 
-    // 出力トピック（高速送信時の取りこぼし防止のためキューサイズを10000に拡張）
+    // 出力トピック
     target_roll_pub_ = this->create_publisher<std_msgs::msg::Float64>("/joystick/target_roll", 10);
     calc_result_pub_ = this->create_publisher<std_msgs::msg::Float64MultiArray>("/joystick/calc_results", 10000);
     twist_pub_ = this->create_publisher<geometry_msgs::msg::Twist>("/real_robot_hum/twist", 10);
-    
-    // シミュレーション終了通知トピック
-    sim_done_pub_ = this->create_publisher<std_msgs::msg::Bool>("/optimization/simulation_done", 10);
 
-    // 入力トピック（Unity・Arduinoからの最新状態を受信）
+    // 入力トピック
     robot_errors_sub_ = this->create_subscription<std_msgs::msg::Float64MultiArray>(
       "target/robot_errors", 10,
       [this](const std_msgs::msg::Float64MultiArray::SharedPtr msg) {
@@ -151,19 +143,6 @@ public:
         }
       });
 
-    sim_done_sub_ = this->create_subscription<std_msgs::msg::Bool>(
-      "/optimization/simulation_done", 10,
-      [this](const std_msgs::msg::Bool::SharedPtr msg) {
-        if (!msg->data) {
-          return;
-        }
-
-        RCLCPP_INFO(this->get_logger(),
-                    "[RESET] /optimization/simulation_done を受信しました。初期位置へ戻します。 (x0=%.2f, y0=%.2f, theta0=%.2f deg)",
-                    x0_, y0_, theta0_deg_);
-        reset_state();
-      });
-
     // タイマーの設定（dt=0.01s）
     auto timer_period = std::chrono::duration<double>(dt_);
     control_timer_ = this->create_wall_timer(
@@ -175,7 +154,6 @@ public:
   }
 
 private:
-  // 参照CSVファイルから e_2, e_3, v_r, v_xi をロードする関数
   void load_human_csv(const std::string & path)
   {
     std::ifstream file(path);
@@ -194,7 +172,7 @@ private:
     bool header_parsed = false;
 
     while (std::getline(file, line)) {
-      if (line.empty() || line[0] == '#') continue; // コメント行スキップ
+      if (line.empty() || line[0] == '#') continue;
 
       std::stringstream ss(line);
       std::string cell;
@@ -204,7 +182,6 @@ private:
         row.push_back(cell);
       }
 
-      // ヘッダー解析
       if (!header_parsed) {
         for (size_t i = 0; i < row.size(); ++i) {
           if (row[i] == "e_2" || row[i] == "e2") e2_idx = static_cast<int>(i);
@@ -216,7 +193,6 @@ private:
         continue;
       }
 
-      // データ行パース
       if (e2_idx != -1 && e3_idx != -1 && static_cast<int>(row.size()) > std::max(e2_idx, e3_idx)) {
         try {
           ref_e2_.push_back(std::stod(row[e2_idx]));
@@ -246,20 +222,12 @@ private:
     robot_y_ = y0_;
     robot_theta_ = theta0_deg_ * M_PI / 180.0;
     step_count_ = 0;
-    is_simulation_done_ = false;
     RCLCPP_INFO(this->get_logger(),
-                "[RESET] 初期位置・姿勢およびステップ数をリセットしました。 robot=(%.2f, %.2f, %.2f deg)",
+                "[RESET] 初期位置・姿勢をリセットしました。 robot=(%.2f, %.2f, %.2f deg)",
                 robot_x_, robot_y_, theta0_deg_);
   }
 
-  void publish_simulation_done()
-  {
-    auto done_msg = std_msgs::msg::Bool();
-    done_msg.data = true;
-    sim_done_pub_->publish(done_msg);
-  }
-
-  // 制御ループ
+  // 制御ループ（タイマー周期ごとに1ステップ実行）
   void control_timer_callback()
   {
     // Unity手動操作時（use_csv_errors_ == false）のみUnityからの受信を待機
@@ -270,100 +238,81 @@ private:
       return;
     }
 
-    // 最適化シミュレーション時（use_csv_errors_ == true）かつ1周完了している場合
-    if (use_csv_errors_ && is_simulation_done_) {
-      publish_simulation_done();
-      return;
+    // 1. 全前進速度 V の決定
+    double V = 0.0;
+    if (use_csv_errors_ && !ref_v_xi_.empty()) {
+      size_t idx = std::min(static_cast<size_t>(step_count_), ref_v_xi_.size() - 1);
+      V = ref_v_xi_[idx];
+    } else {
+      double phi_x = -std::max(std::min((latest_potA_ - 512.0) / 512.0, 1.0), -1.0);
+      V = k_v_ * phi_x;
     }
 
-    // --- 計算実行ループ ---
-    // use_csv_errors_ == true の場合は max_steps_ まで一気に瞬時に計算
-    // use_csv_errors_ == false（手動操作時）の場合は 1ステップずつ実行
-    do {
-      // 1. 全前進速度 V の決定
-      double V = 0.0;
-      if (use_csv_errors_ && !ref_v_xi_.empty()) {
-        size_t idx = std::min(static_cast<size_t>(step_count_), ref_v_xi_.size() - 1);
-        V = ref_v_xi_[idx]; // CSVから当時の前進速度を取得
-      } else {
-        double phi_x = -std::max(std::min((latest_potA_ - 512.0) / 512.0, 1.0), -1.0);
-        V = k_v_ * phi_x;
+    // 2. 旋回速度 omega の決定
+    double potB = arduino_received_ ? latest_potB_ : center_B_;
+    double phi_hum_y = std::max(std::min(
+        (potB - center_B_) / max_deviation_B_, 1.0), -1.0) * max_roll_rad_;
+    double omega = k_w_ * phi_hum_y;
+
+    // 3. 逆最適制御則による速度・入力の計算
+    double current_e2 = unity_e2_;
+    double current_e3 = unity_e3_;
+    double v_r = observed_vr_;
+
+    // CSV参照エラーモード時はCSVから取得
+    if (use_csv_errors_ && !ref_e2_.empty()) {
+      size_t idx = std::min(static_cast<size_t>(step_count_), ref_e2_.size() - 1);
+      current_e2 = ref_e2_[idx];
+      current_e3 = ref_e3_[idx];
+      if (!ref_vr_.empty()) {
+        v_r = ref_vr_[idx];
       }
-
-      // 2. 旋回速度 omega の決定
-      double potB = arduino_received_ ? latest_potB_ : center_B_;
-      double phi_hum_y = std::max(std::min(
-          (potB - center_B_) / max_deviation_B_, 1.0), -1.0) * max_roll_rad_;
-      double omega = k_w_ * phi_hum_y;
-
-      // 3. 逆最適制御則による速度・入力の計算
-      double current_e2 = unity_e2_;
-      double current_e3 = unity_e3_;
-      double v_r = observed_vr_;
-
-      // CSV参照エラーモードかつ参照データが存在する場合はCSVの値を使用
-      if (use_csv_errors_ && !ref_e2_.empty()) {
-        size_t idx = std::min(static_cast<size_t>(step_count_), ref_e2_.size() - 1);
-        current_e2 = ref_e2_[idx];
-        current_e3 = ref_e3_[idx];
-        if (!ref_vr_.empty()) {
-          v_r = ref_vr_[idx];
-        }
-      }
-
-      double v_xi = 0.0, v_eta = 0.0, u = 0.0;
-      inversely_optimal_control(current_e2, current_e3, V, v_r, v_xi, v_eta, u);
-      
-      // 目標ロール角の計算と出力
-      double phi_com_y = -u / k_w_;
-      auto target_roll_msg = std_msgs::msg::Float64();
-      target_roll_msg.data = phi_com_y;
-      if (publish_control_output_) {
-        target_roll_pub_->publish(target_roll_msg);
-      }
-
-      // CSV用ログデータの出力
-      auto calc_result_msg = std_msgs::msg::Float64MultiArray();
-      calc_result_msg.data = {
-        round(step_count_ * dt_ * 100.0) / 100.0, // 0: time
-        robot_x_,                                 // 1: x
-        robot_y_,                                 // 2: y
-        robot_theta_,                             // 3: theta
-        current_e2,                               // 4: e_2 (使用した e_2)
-        current_e3,                               // 5: e_3 (使用した e_3)
-        v_r,                                      // 6: v_r
-        v_xi,                                     // 7: v_xi
-        v_eta,                                    // 8: v_eta
-        u,                                        // 9: u
-        phi_com_y,                                // 10: phi_com_y
-        phi_hum_y                                 // 11: phi_hum_y
-      };
-      calc_result_pub_->publish(calc_result_msg);
-
-      // 4. ロボット位置・姿勢の数値積分
-      double x_dot = v_xi * std::cos(robot_theta_) - v_eta * std::sin(robot_theta_);
-      double y_dot = v_xi * std::sin(robot_theta_) + v_eta * std::cos(robot_theta_);
-
-      robot_x_ += x_dot * dt_;
-      robot_y_ += y_dot * dt_;
-      robot_theta_ += omega * dt_;
-      robot_theta_ = normalize_angle(robot_theta_);
-
-      // UnityへTwist送信
-      if (publish_control_output_) {
-        publish_twist(v_xi, v_eta, omega);
-      }
-
-      step_count_++;
-
-    } while (use_csv_errors_ && step_count_ < max_steps_);
-
-    // CSV参照モード（最適化時）で規定ステップに達した場合は一括完了通知
-    if (use_csv_errors_ && step_count_ >= max_steps_) {
-      is_simulation_done_ = true;
-      RCLCPP_INFO(this->get_logger(), "[DONE] シミュレーションを一括完了しました (%d ステップ)。", max_steps_);
-      publish_simulation_done();
     }
+
+    double v_xi = 0.0, v_eta = 0.0, u = 0.0;
+    inversely_optimal_control(current_e2, current_e3, V, v_r, v_xi, v_eta, u);
+
+    // 目標ロール角の計算と出力
+    double phi_com_y = -u / k_w_;
+    auto target_roll_msg = std_msgs::msg::Float64();
+    target_roll_msg.data = phi_com_y;
+    if (publish_control_output_) {
+      target_roll_pub_->publish(target_roll_msg);
+    }
+
+    // CSV用ログデータの出力
+    auto calc_result_msg = std_msgs::msg::Float64MultiArray();
+    calc_result_msg.data = {
+      round(step_count_ * dt_ * 100.0) / 100.0, // 0: time
+      robot_x_,                                 // 1: x
+      robot_y_,                                 // 2: y
+      robot_theta_,                             // 3: theta
+      current_e2,                               // 4: e_2
+      current_e3,                               // 5: e_3
+      v_r,                                      // 6: v_r
+      v_xi,                                     // 7: v_xi
+      v_eta,                                    // 8: v_eta
+      u,                                        // 9: u
+      phi_com_y,                                // 10: phi_com_y
+      phi_hum_y                                 // 11: phi_hum_y
+    };
+    calc_result_pub_->publish(calc_result_msg);
+
+    // 4. ロボット位置・姿勢の数値積分
+    double x_dot = v_xi * std::cos(robot_theta_) - v_eta * std::sin(robot_theta_);
+    double y_dot = v_xi * std::sin(robot_theta_) + v_eta * std::cos(robot_theta_);
+
+    robot_x_ += x_dot * dt_;
+    robot_y_ += y_dot * dt_;
+    robot_theta_ += omega * dt_;
+    robot_theta_ = normalize_angle(robot_theta_);
+
+    // UnityへTwist送信
+    if (publish_control_output_) {
+      publish_twist(v_xi, v_eta, omega);
+    }
+
+    step_count_++;
   }
 
   void publish_twist(double v_xi, double v_eta, double u)
@@ -403,11 +352,9 @@ private:
   rclcpp::Publisher<std_msgs::msg::Float64>::SharedPtr target_roll_pub_;
   rclcpp::Publisher<std_msgs::msg::Float64MultiArray>::SharedPtr calc_result_pub_;
   rclcpp::Publisher<geometry_msgs::msg::Twist>::SharedPtr twist_pub_;
-  rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr sim_done_pub_;
-  
+
   rclcpp::Subscription<std_msgs::msg::Float64MultiArray>::SharedPtr robot_errors_sub_;
   rclcpp::Subscription<std_msgs::msg::Float64MultiArray>::SharedPtr arduino_state_sub_;
-  rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr sim_done_sub_;
 
   rclcpp::TimerBase::SharedPtr control_timer_;
   rclcpp::node_interfaces::OnSetParametersCallbackHandle::SharedPtr param_callback_handle_;
@@ -416,18 +363,16 @@ private:
   double alpha_, k_2_, k_3_, c_0_, dt_;
   double k_v_, k_w_, rho_;
   double x0_, y0_, theta0_deg_;
-  int max_steps_;
 
-  // CSV参照エラーモード切り替え用変数
+  // CSV参照エラーモード用
   bool use_csv_errors_ = true;
   std::string human_csv_path_;
   std::vector<double> ref_e2_;
   std::vector<double> ref_e3_;
   std::vector<double> ref_vr_;
-  std::vector<double> ref_v_xi_; // ★データ取得時の前進速度列（v_xi）用バッファ
+  std::vector<double> ref_v_xi_;
 
   int step_count_ = 0;
-  bool is_simulation_done_ = false;
   bool errors_received_ = false;
   bool arduino_received_ = false;
   bool publish_control_output_ = true;

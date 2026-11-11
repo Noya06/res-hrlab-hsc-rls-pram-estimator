@@ -20,7 +20,7 @@ def generate_launch_description():
     )
     path_tracking_arg = DeclareLaunchArgument(
         'use_path_tracking',
-        default_value='false',
+        default_value='true',
         description='経路誤差から計算した操舵量をTwistへ使うか',
     )
     use_moza_arg = DeclareLaunchArgument(
@@ -30,12 +30,12 @@ def generate_launch_description():
     )
     use_ffb_arg = DeclareLaunchArgument(
         'use_ffb',
-        default_value='false',
+        default_value='true',
         description='MOZAのForce Feedbackノードを起動するか',
     )
     override_constant_forward_speed_arg = DeclareLaunchArgument(
         'override_constant_forward_speed',
-        default_value='false',
+        default_value='true',
         description='MOZAの前後入力を無視して固定速度で走行するか',
     )
     max_deviation_b_arg = DeclareLaunchArgument(
