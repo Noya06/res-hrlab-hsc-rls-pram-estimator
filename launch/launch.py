@@ -11,8 +11,8 @@ def generate_launch_description():
         description='CSV出力ディレクトリ',
     )
     steps_arg = DeclareLaunchArgument('steps', default_value='10000', description='総シミュレーションステップ数')
-    k2_arg = DeclareLaunchArgument('k_2', default_value='2.0', description='制御パラメータ k2')
-    k3_arg = DeclareLaunchArgument('k_3', default_value='1.0', description='制御パラメータ k3')
+    k2_arg = DeclareLaunchArgument('k_2', default_value='20.0', description='制御パラメータ k2')
+    k3_arg = DeclareLaunchArgument('k_3', default_value='0.5', description='制御パラメータ k3')
     forward_speed_arg = DeclareLaunchArgument(
         'forward_speed',
         default_value='1.0',
@@ -59,10 +59,6 @@ def generate_launch_description():
     rls_process_csv_arg = DeclareLaunchArgument(
         'rls_process_csv', default_value='false', description='起動時にCSVでRLSを実行するか',
     )
-    rlshsc_alpha_arg = DeclareLaunchArgument(
-        'rlshsc_alpha', default_value='0.5',
-        description='IOC出力とRLS出力の混合係数 alpha',
-    )
 
     # メイン計算ノードの設定
     ioc_calculator_node = Node(
@@ -74,7 +70,7 @@ def generate_launch_description():
             'k_2': LaunchConfiguration('k_2'),
             'k_3': LaunchConfiguration('k_3'),
             'k_v': 1.0,
-            'k_w': 1.0,
+            'k_w': 0.5,
             'forward_speed': LaunchConfiguration('forward_speed'),
             'use_path_tracking': LaunchConfiguration('use_path_tracking'),
             'override_constant_forward_speed': LaunchConfiguration(
@@ -147,11 +143,14 @@ def generate_launch_description():
         executable='rlshsc_integrator_node',
         name='rlshsc_integrator_node',
         parameters=[{
-            'alpha': LaunchConfiguration('rlshsc_alpha'),
             'k_w': 1.0,
             'phi_ioc_index': 10,
             'feature_start_index': 4,
             'feature_count': 2,
+            'joystick_center': 512.0,
+            'joystick_max_deviation': LaunchConfiguration('max_deviation_B'),
+            'max_roll_rad': LaunchConfiguration('max_roll_rad'),
+            'invert_steering': LaunchConfiguration('invert_steering'),
         }],
         output='screen',
     )
@@ -171,7 +170,6 @@ def generate_launch_description():
         invert_steering_arg,
         rls_csv_path_arg,
         rls_process_csv_arg,
-        rlshsc_alpha_arg,
         ioc_calculator_node,
         csv_logger_node,
         moza_joystick_bridge_node,

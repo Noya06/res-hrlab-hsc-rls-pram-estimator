@@ -201,19 +201,20 @@ ros2 run res-hr-simulate-hsc-ros2-unity rls_estimator_node --ros-args \
 
 ### rlshsc_integrator_node
 
-IOC計算結果とRLS推定値を統合し、次式で最終的な操舵指令を計算します。
+IOC計算結果とRLS推定値を加算し、FFBへ送る操舵指令を計算します。
 
 ```text
-phi_com_y = alpha * phi_IOC + (1 - alpha) * (xi^T * theta_hat)
+target_roll = phi_IOC + (xi^T * theta_hat)
 ```
 
-`alpha`の既定値は`0.5`です。`/joystick/calc_results`の`[e_2,e_3]`と
-`/rls/theta`を使用し、混合後の値を`/joystick/target_roll`、
-`/real_robot_hum/twist.angular.z`、`/rlshsc/phi_com_y`へ出力します。
+`/joystick/calc_results`の`[e_2,e_3]`と`/rls/theta`を使用し、
+加算後の値を`/joystick/target_roll`と`/rlshsc/phi_com_y`へ出力します。
+一方、`/joystick/joystick_state`から計算した`phi_hum`を
+`/real_robot_hum/twist.angular.z`へ出力するため、Unityは人間のジョイスティック入力を受け取ります。
 二重出力を防ぐため、launch起動時はIOCノード自身の制御出力を無効化しています。
 
 ```bash
-ros2 launch res-hr-simulate-hsc-ros2-unity launch.py rlshsc_alpha:=0.7
+ros2 launch res-hr-simulate-hsc-ros2-unity launch.py
 ```
 
 記録列:
