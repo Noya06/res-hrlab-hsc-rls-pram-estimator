@@ -53,12 +53,18 @@ def generate_launch_description():
         default_value='true',
         description='ジョイスティック左右軸と旋回方向を反転するか',
     )
+    rls_csv_path_arg = DeclareLaunchArgument(
+        'rls_csv_path', default_value='', description='RLSオフライン推定に使用するCSV',
+    )
+    rls_process_csv_arg = DeclareLaunchArgument(
+        'rls_process_csv', default_value='false', description='起動時にCSVでRLSを実行するか',
+    )
 
     # メイン計算ノードの設定
-    main_calculator_node = Node(
+    ioc_calculator_node = Node(
         package='res-hr-simulate-hsc-ros2-unity',
-        executable='main_calculator_node',
-        name='main_calculator_node',
+        executable='ioc_calculator_node',
+        name='ioc_calculator_node',
         parameters=[{
             'dt': 0.01,
             'k_2': LaunchConfiguration('k_2'),
@@ -95,7 +101,7 @@ def generate_launch_description():
         executable='moza_joystick_bridge_node',
         name='moza_joystick_bridge_node',
         parameters=[{
-            'device': '/dev/input/event16',
+            'device': '/dev/input/event5',
             'axis_center': 32767.5,
             'axis_scale': 32767.5,
             'deadzone': 0.02,
@@ -117,6 +123,20 @@ def generate_launch_description():
         condition=IfCondition(LaunchConfiguration('use_ffb'))
     )
 
+    rls_estimator_node = Node(
+        package='res-hr-simulate-hsc-ros2-unity',
+        executable='rls_estimator_node',
+        name='rls_estimator_node',
+        parameters=[{
+            'feature_indices': [4, 5],
+            'phi_ref_index': 11,
+            'phi_src_index': 10,
+            'csv_path': LaunchConfiguration('rls_csv_path'),
+            'process_csv_on_start': LaunchConfiguration('rls_process_csv'),
+        }],
+        output='screen',
+    )
+
     return LaunchDescription([
         output_dir_arg,
         steps_arg,
@@ -130,8 +150,11 @@ def generate_launch_description():
         max_deviation_b_arg,
         max_roll_rad_arg,
         invert_steering_arg,
-        main_calculator_node,
+        rls_csv_path_arg,
+        rls_process_csv_arg,
+        ioc_calculator_node,
         csv_logger_node,
         moza_joystick_bridge_node,
-        moza_ffb_node
+        moza_ffb_node,
+        rls_estimator_node
     ])

@@ -20,7 +20,7 @@ class MozaJoystickBridgeNode : public rclcpp::Node
 public:
   MozaJoystickBridgeNode() : Node("moza_joystick_bridge_node")
   {
-    this->declare_parameter<std::string>("device", "/dev/input/event17");
+    this->declare_parameter<std::string>("device", "/dev/input/event5");
     this->declare_parameter<int>("axis_x_code", ABS_Y);
     this->declare_parameter<int>("axis_y_code", ABS_X);
     this->declare_parameter<double>("axis_center", 32767.5);
@@ -115,7 +115,7 @@ private:
 
     if (override_constant_forward_speed_) {
       // Trueのとき: 前後(x)の入力を無視し、前進速度を最大値にする。
-      // main_calculator_nodeは512を中心に1024を前進、0を後退として解釈する。
+      // ioc_calculator_nodeは512を中心に1024を前進、0を後退として解釈する。
       state_msg.data[0] = 1024.0;
     } else {
       // Falseのとき: 通常の入力値を使用

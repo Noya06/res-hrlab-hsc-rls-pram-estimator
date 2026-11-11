@@ -110,7 +110,7 @@ ros2 launch res-hr-simulate-hsc-ros2-unity launch.py --show-args
 
 ## 実装内容
 
-### main_calculator_node
+### ioc_calculator_node
 
 `/target/robot_errors`から`e2`と`e3`を受信し、制御入力を計算します。
 
@@ -178,6 +178,26 @@ FFB = p_gain * target_roll + d_gain * target_roll_difference
 ### csv_logger_node
 
 `/joystick/calc_results`と`/real_robot_hum/state`を受信し、CSVへ保存します。
+
+### rls_estimator_node
+
+`/joystick/calc_results`を購読し、`phi_ref=phi_hum_y`、`phi_src=phi_com_y`、
+特徴量`[e_2,e_3]`でRLSを逐次更新します。推定パラメータは
+`/rls/theta`（`Float64MultiArray`）へ出力されます。現在の配列では、特徴量の列番号は
+`[4,5]`、参照入力は`11`、HSC出力は`10`です。
+
+CSVをオフラインで処理する場合:
+
+```bash
+ros2 run res-hr-simulate-hsc-ros2-unity rls_estimator_node --ros-args \
+  -p csv_path:=/path/to/result.csv \
+  -p process_csv_on_start:=true \
+  -p csv_output_path:=/path/to/rls_theta.csv
+```
+
+`RLSEstimator`は初期共分散`initial_covariance`（既定値`1e3`）と
+`initial_parameters`を受け取り、各サンプルでゲイン、パラメータ、共分散を更新します。
+更新後の共分散は数値誤差による非対称化を防ぐため対称化されます。
 
 記録列:
 

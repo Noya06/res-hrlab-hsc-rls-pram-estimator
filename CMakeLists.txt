@@ -18,12 +18,20 @@ find_package(geometry_msgs REQUIRED)
 # ------------------------------------------------------------------------------
 
 # メイン計算ノード
-add_executable(main_calculator_node src/main_calculator_node.cpp)
-ament_target_dependencies(main_calculator_node
+add_executable(ioc_calculator_node src/ioc_calculator_node.cpp)
+ament_target_dependencies(ioc_calculator_node
   rclcpp
   std_msgs
   geometry_msgs
 )
+
+# RLSパラメータ推定ノード
+add_executable(rls_estimator_node src/rls_estimator_node.cpp)
+ament_target_dependencies(rls_estimator_node
+  rclcpp
+  std_msgs
+)
+target_include_directories(rls_estimator_node PRIVATE include)
 
 # CSVログ記録ノード
 add_executable(csv_logger_node src/csv_logger_node.cpp)
@@ -45,7 +53,8 @@ ament_target_dependencies(moza_joystick_bridge_node
 
 # 実行可能バイナリのインストール
 install(TARGETS
-  main_calculator_node
+  ioc_calculator_node
+  rls_estimator_node
   csv_logger_node
   moza_joystick_bridge_node
   DESTINATION lib/${PROJECT_NAME}
@@ -61,6 +70,11 @@ install(DIRECTORY launch
 install(DIRECTORY scripts
   DESTINATION share/${PROJECT_NAME}/
   USE_SOURCE_PERMISSIONS
+  OPTIONAL
+)
+
+install(DIRECTORY include
+  DESTINATION include
   OPTIONAL
 )
 

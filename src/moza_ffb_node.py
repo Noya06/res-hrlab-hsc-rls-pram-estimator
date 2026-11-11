@@ -10,7 +10,7 @@ class JoystickFFBNode(Node):
     def __init__(self):
         super().__init__('joystick_ffb_node')
 
-        self.declare_parameter('device_path', '/dev/input/event17')
+        self.declare_parameter('device_path', '/dev/input/event5')
         device_path = self.get_parameter('device_path').value
 
         self.device = None
