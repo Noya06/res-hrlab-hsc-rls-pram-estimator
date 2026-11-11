@@ -59,6 +59,10 @@ def generate_launch_description():
     rls_process_csv_arg = DeclareLaunchArgument(
         'rls_process_csv', default_value='false', description='起動時にCSVでRLSを実行するか',
     )
+    rlshsc_alpha_arg = DeclareLaunchArgument(
+        'rlshsc_alpha', default_value='0.5',
+        description='IOC出力とRLS出力の混合係数 alpha',
+    )
 
     # メイン計算ノードの設定
     ioc_calculator_node = Node(
@@ -79,6 +83,7 @@ def generate_launch_description():
             'max_deviation_B': LaunchConfiguration('max_deviation_B'),
             'max_roll_rad': LaunchConfiguration('max_roll_rad'),
             'invert_steering': LaunchConfiguration('invert_steering'),
+            'publish_control_output': False,
         }],
         output='screen'
     )
@@ -137,6 +142,20 @@ def generate_launch_description():
         output='screen',
     )
 
+    rlshsc_integrator_node = Node(
+        package='res-hr-simulate-hsc-ros2-unity',
+        executable='rlshsc_integrator_node',
+        name='rlshsc_integrator_node',
+        parameters=[{
+            'alpha': LaunchConfiguration('rlshsc_alpha'),
+            'k_w': 1.0,
+            'phi_ioc_index': 10,
+            'feature_start_index': 4,
+            'feature_count': 2,
+        }],
+        output='screen',
+    )
+
     return LaunchDescription([
         output_dir_arg,
         steps_arg,
@@ -152,9 +171,11 @@ def generate_launch_description():
         invert_steering_arg,
         rls_csv_path_arg,
         rls_process_csv_arg,
+        rlshsc_alpha_arg,
         ioc_calculator_node,
         csv_logger_node,
         moza_joystick_bridge_node,
         moza_ffb_node,
-        rls_estimator_node
+        rls_estimator_node,
+        rlshsc_integrator_node
     ])

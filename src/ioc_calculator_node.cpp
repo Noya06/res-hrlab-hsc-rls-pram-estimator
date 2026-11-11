@@ -36,6 +36,7 @@ public:
     this->declare_parameter<double>("k_w", 1.0);
     this->declare_parameter<double>("rho", 0.0);
     this->declare_parameter<int>("max_steps", 1000); // 1エピソードの最大ステップ数
+    this->declare_parameter<bool>("publish_control_output", true);
 
     // CSV参照エラー使用モード用のパラメータ宣言
     this->declare_parameter<bool>("use_csv_errors", true);
@@ -50,6 +51,7 @@ public:
     this->get_parameter("k_w", k_w_);
     this->get_parameter("rho", rho_);
     this->get_parameter("max_steps", max_steps_);
+    this->get_parameter("publish_control_output", publish_control_output_);
 
     this->get_parameter("x0", x0_);
     this->get_parameter("y0", y0_);
@@ -316,7 +318,9 @@ private:
       double phi_com_y = -u / k_w_;
       auto target_roll_msg = std_msgs::msg::Float64();
       target_roll_msg.data = phi_com_y;
-      target_roll_pub_->publish(target_roll_msg);
+      if (publish_control_output_) {
+        target_roll_pub_->publish(target_roll_msg);
+      }
 
       // CSV用ログデータの出力
       auto calc_result_msg = std_msgs::msg::Float64MultiArray();
@@ -346,7 +350,9 @@ private:
       robot_theta_ = normalize_angle(robot_theta_);
 
       // UnityへTwist送信
-      publish_twist(v_xi, v_eta, omega);
+      if (publish_control_output_) {
+        publish_twist(v_xi, v_eta, omega);
+      }
 
       step_count_++;
 
@@ -424,6 +430,7 @@ private:
   bool is_simulation_done_ = false;
   bool errors_received_ = false;
   bool arduino_received_ = false;
+  bool publish_control_output_ = true;
   double observed_vr_ = 0.0;
   double unity_e2_ = 0.0;
   double unity_e3_ = 0.0;

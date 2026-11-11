@@ -33,6 +33,14 @@ ament_target_dependencies(rls_estimator_node
 )
 target_include_directories(rls_estimator_node PRIVATE include)
 
+# RLS-HSC統合ノード
+add_executable(rlshsc_integrator_node src/rlshsc_integrator_node.cpp)
+ament_target_dependencies(rlshsc_integrator_node
+  rclcpp
+  std_msgs
+  geometry_msgs
+)
+
 # CSVログ記録ノード
 add_executable(csv_logger_node src/csv_logger_node.cpp)
 ament_target_dependencies(csv_logger_node
@@ -55,6 +63,7 @@ ament_target_dependencies(moza_joystick_bridge_node
 install(TARGETS
   ioc_calculator_node
   rls_estimator_node
+  rlshsc_integrator_node
   csv_logger_node
   moza_joystick_bridge_node
   DESTINATION lib/${PROJECT_NAME}
