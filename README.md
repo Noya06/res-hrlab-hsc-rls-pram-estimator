@@ -174,6 +174,10 @@ FFB = p_gain * target_roll + d_gain * target_roll_difference
 ```
 
 `use_ffb:=false`の場合、このノードは起動しません。
+FFB出力には一次ローパスを適用し、急な反力変化を抑えています。
+既定値は`force_filter_alpha=0.15`、`max_force_level=20000`です。
+これらはFFBの反力だけに作用し、Unityへ送るジョイスティック入力や
+ロボットの制御速度は変更しません。
 
 ### csv_logger_node
 

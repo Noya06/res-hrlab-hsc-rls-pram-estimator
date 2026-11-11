@@ -244,7 +244,8 @@ private:
       size_t idx = std::min(static_cast<size_t>(step_count_), ref_v_xi_.size() - 1);
       V = ref_v_xi_[idx];
     } else {
-      double phi_x = -std::max(std::min((latest_potA_ - 512.0) / 512.0, 1.0), -1.0);
+      // potA=1024 is forward, potA=0 is reverse.
+      double phi_x = std::max(std::min((latest_potA_ - 512.0) / 512.0, 1.0), -1.0);
       V = k_v_ * phi_x;
     }
 

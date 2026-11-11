@@ -21,16 +21,27 @@ class JoystickFFBNode(Node):
         self.setup_ffb_effect()
 
         # Pゲイン
-        self.declare_parameter('p_gain', 5000.0) 
+        self.declare_parameter('p_gain', 1000.0)
         self.p_gain = self.get_parameter('p_gain').value
 
         # Dゲイン
         self.declare_parameter('d_gain', 0.0)
         self.d_gain = self.get_parameter('d_gain').value
 
+        # 反力の急変を抑える一次ローパス係数と最大反力
+        self.declare_parameter('force_filter_alpha', 0.15)
+        self.force_filter_alpha = self.get_parameter('force_filter_alpha').value
+        self.declare_parameter('max_force_level', 20000)
+        self.max_force_level = self.get_parameter('max_force_level').value
+        if not 0.0 < self.force_filter_alpha <= 1.0:
+            raise ValueError('force_filter_alpha must be in (0, 1]')
+        if not 0 < self.max_force_level <= 32767:
+            raise ValueError('max_force_level must be in [1, 32767]')
+
         # 微分計算用の前回値と時間
         self.prev_target_roll = 0.0
         self.prev_time = self.get_clock().now()
+        self.filtered_level = 0.0
 
         self.subscription = self.create_subscription(
             Float64,
@@ -80,8 +91,9 @@ class JoystickFFBNode(Node):
         # PゲインとDゲインを合成してフィードバック量を計算
         raw_level = int((target_roll * self.p_gain) + (derivative * self.d_gain))
         
-        # 32767 から -32767 の範囲に制限
-        level = max(min(raw_level, 32767), -32767)
+        # 反力を平滑化し、最大反力を制限する。これはFFBだけに適用される。
+        self.filtered_level += self.force_filter_alpha * (raw_level - self.filtered_level)
+        level = int(max(min(self.filtered_level, self.max_force_level), -self.max_force_level))
 
         try:
             if level == 0:

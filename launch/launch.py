@@ -3,16 +3,20 @@ from launch.actions import DeclareLaunchArgument
 from launch.conditions import IfCondition
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
+
+
 def generate_launch_description():
-    # コマンドライン引数の宣言
+    # 実験結果とシミュレーション条件
     output_dir_arg = DeclareLaunchArgument(
         'output_dir',
         default_value='/home/hurolab/Programs/hsc_rls_pram_ws/data/datafiles',
         description='CSV出力ディレクトリ',
     )
-    steps_arg = DeclareLaunchArgument('steps', default_value='10000', description='総シミュレーションステップ数')
-    k2_arg = DeclareLaunchArgument('k_2', default_value='20.0', description='制御パラメータ k2')
-    k3_arg = DeclareLaunchArgument('k_3', default_value='0.5', description='制御パラメータ k3')
+    steps_arg = DeclareLaunchArgument(
+        'steps', default_value='10000', description='総シミュレーションステップ数'
+    )
+    k2_arg = DeclareLaunchArgument('k_2', default_value='20.0', description='IOC制御ゲイン k2')
+    k3_arg = DeclareLaunchArgument('k_3', default_value='0.5', description='IOC制御ゲイン k3')
     forward_speed_arg = DeclareLaunchArgument(
         'forward_speed',
         default_value='1.0',
@@ -60,17 +64,20 @@ def generate_launch_description():
         'rls_process_csv', default_value='false', description='起動時にCSVでRLSを実行するか',
     )
 
-    # メイン計算ノードの設定
+    # IOC計算ノード:
+    # 誤差からIOC出力を計算し、/joystick/calc_resultsへ中間データを出力する。
+    # 制御出力はRLS-HSC統合ノードへ一本化するため、ここでは無効にする。
     ioc_calculator_node = Node(
         package='res-hr-simulate-hsc-ros2-unity',
         executable='ioc_calculator_node',
         name='ioc_calculator_node',
         parameters=[{
             'dt': 0.01,
+            # IOCの制御ゲインと速度計算設定
             'k_2': LaunchConfiguration('k_2'),
             'k_3': LaunchConfiguration('k_3'),
             'k_v': 1.0,
-            'k_w': 0.5,
+            'k_w': 1.0,
             'forward_speed': LaunchConfiguration('forward_speed'),
             'use_path_tracking': LaunchConfiguration('use_path_tracking'),
             'override_constant_forward_speed': LaunchConfiguration(
@@ -79,12 +86,14 @@ def generate_launch_description():
             'max_deviation_B': LaunchConfiguration('max_deviation_B'),
             'max_roll_rad': LaunchConfiguration('max_roll_rad'),
             'invert_steering': LaunchConfiguration('invert_steering'),
+            # /real_robot_hum/twistと/joystick/target_rollの二重出力を防止
             'publish_control_output': False,
         }],
         output='screen'
     )
 
-    # CSV記録ノードの設定
+    # CSVログノード:
+    # IOC計算結果とUnity状態を収集し、実験結果をCSVへ保存する。
     csv_logger_node = Node(
         package='res-hr-simulate-hsc-ros2-unity',
         executable='csv_logger_node',
@@ -96,12 +105,14 @@ def generate_launch_description():
         output='screen'
     )
 
-    # MOZA AB9 FFB Base からのスティック入力を ROS トピックへ反映するノード
+    # MOZAジョイスティック入力ノード:
+    # Linux input deviceから操舵・前後軸を読み取り、/joystick/joystick_stateへ出力する。
     moza_joystick_bridge_node = Node(
         package='res-hr-simulate-hsc-ros2-unity',
         executable='moza_joystick_bridge_node',
         name='moza_joystick_bridge_node',
         parameters=[{
+            # 使用するデバイスと軸の正規化設定
             'device': '/dev/input/event5',
             'axis_center': 32767.5,
             'axis_scale': 32767.5,
@@ -116,19 +127,33 @@ def generate_launch_description():
         condition=IfCondition(LaunchConfiguration('use_moza'))
     )
 
+    # MOZA FFBノード:
+    # /joystick/target_rollを反力指令へ変換し、ジョイスティックへ送信する。
+    # force_filter_alphaとmax_force_levelは反力の急変・過大出力を抑制する。
     moza_ffb_node = Node(
         package='res-hr-simulate-hsc-ros2-unity',
         executable='moza_ffb_node',
         name='moza_ffb_node',
+        parameters=[{
+            # FFBの比例・微分ゲインと安全側の出力制限
+            'p_gain': 1000.0,
+            'd_gain': 0.0,
+            'force_filter_alpha': 0.15, # 1.0でフィルタなし
+            'max_force_level': 10000, # 最大出力レベル(0-32767)
+        }],
         output='screen',
         condition=IfCondition(LaunchConfiguration('use_ffb'))
     )
 
+    # RLS推定ノード:
+    # /joystick/calc_resultsから[e_2, e_3]を特徴量として逐次推定する。
+    # 推定値thetaは/rls/thetaへ出力する。
     rls_estimator_node = Node(
         package='res-hr-simulate-hsc-ros2-unity',
         executable='rls_estimator_node',
         name='rls_estimator_node',
         parameters=[{
+            # calc_resultsの列: e_2=4, e_3=5, phi_hum=11, phi_ioc=10
             'feature_indices': [4, 5],
             'phi_ref_index': 11,
             'phi_src_index': 10,
@@ -138,11 +163,15 @@ def generate_launch_description():
         output='screen',
     )
 
+    # RLS-HSC統合ノード:
+    # phi_target = phi_IOC + xi^T * theta_hatを計算する。
+    # target_rollはFFBへ、phi_humはJoystick入力からUnityへ送る。
     rlshsc_integrator_node = Node(
         package='res-hr-simulate-hsc-ros2-unity',
         executable='rlshsc_integrator_node',
         name='rlshsc_integrator_node',
         parameters=[{
+            # IOC/RLS入力の列番号と速度出力設定
             'k_w': 1.0,
             'phi_ioc_index': 10,
             'feature_start_index': 4,
@@ -155,6 +184,7 @@ def generate_launch_description():
         output='screen',
     )
 
+    # 引数を先に登録し、その後に各ノードを起動する。
     return LaunchDescription([
         output_dir_arg,
         steps_arg,
