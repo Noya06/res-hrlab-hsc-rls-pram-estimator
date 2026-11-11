@@ -77,7 +77,9 @@ private:
       rls_prediction += msg->data[feature_start_index_ + i] * theta_[i];
     }
     const double phi_ioc = msg->data[phi_ioc_index_];
-    const double phi_com = blend_alpha_ * phi_ioc + (1.0 - blend_alpha_) * rls_prediction;
+    //const double phi_com = blend_alpha_ * phi_ioc + (1.0 - blend_alpha_) * rls_prediction;
+    const double phi_com = phi_ioc + rls_prediction;
+
 
     std_msgs::msg::Float64 phi_msg;
     phi_msg.data = phi_com;
