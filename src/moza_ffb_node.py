@@ -3,14 +3,13 @@ import rclpy
 from rclpy.node import Node
 from std_msgs.msg import Float64
 from evdev import InputDevice, ecodes, ff
-import math
 import errno
 
 class JoystickFFBNode(Node):
     def __init__(self):
         super().__init__('joystick_ffb_node')
 
-        self.declare_parameter('device_path', '/dev/input/event5')
+        self.declare_parameter('device_path', '/dev/input/event4')
         device_path = self.get_parameter('device_path').value
 
         self.device = None
@@ -21,7 +20,7 @@ class JoystickFFBNode(Node):
         self.setup_ffb_effect()
 
         # Pゲイン
-        self.declare_parameter('p_gain', 1000.0)
+        self.declare_parameter('p_gain', 500.0)
         self.p_gain = self.get_parameter('p_gain').value
 
         # Dゲイン
@@ -82,7 +81,7 @@ class JoystickFFBNode(Node):
         # 経過時間(dt)と目標値の変化量(derivative)を計算
         dt = (current_time - self.prev_time).nanoseconds / 1e9
         derivative = 0.0
-        if dt > 0:
+        if dt > 0.001:
             derivative = (target_roll - self.prev_target_roll) / dt
 
         self.prev_target_roll = target_roll

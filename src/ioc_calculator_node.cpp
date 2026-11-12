@@ -7,12 +7,11 @@
 #include <algorithm>
 #include <fstream>
 #include <sstream>
+#include <stdexcept>
 
 #include <rclcpp/rclcpp.hpp>
 #include <rcl_interfaces/msg/set_parameters_result.hpp>
-#include <std_msgs/msg/float64.hpp>
 #include <std_msgs/msg/float64_multi_array.hpp>
-#include <geometry_msgs/msg/twist.hpp>
 
 using namespace std::chrono_literals;
 
@@ -34,7 +33,8 @@ public:
     this->declare_parameter<double>("k_v", 1.0);
     this->declare_parameter<double>("k_w", 1.0);
     this->declare_parameter<double>("rho", 0.0);
-    this->declare_parameter<bool>("publish_control_output", true);
+    this->declare_parameter<double>("ioc_damping", 1e-3);
+    this->declare_parameter<double>("max_control_roll", 1.0);
 
     // CSV参照エラー使用モード用のパラメータ宣言
     this->declare_parameter<bool>("use_csv_errors", false);
@@ -48,8 +48,12 @@ public:
     this->get_parameter("k_v", k_v_);
     this->get_parameter("k_w", k_w_);
     this->get_parameter("rho", rho_);
-    this->get_parameter("publish_control_output", publish_control_output_);
-
+    this->get_parameter("ioc_damping", ioc_damping_);
+    this->get_parameter("max_control_roll", max_control_roll_);
+    if (ioc_damping_ <= 0.0 || max_control_roll_ <= 0.0) {
+      throw std::invalid_argument(
+        "ioc_damping and max_control_roll must be positive");
+    }
     this->get_parameter("x0", x0_);
     this->get_parameter("y0", y0_);
     this->get_parameter("theta0_deg", theta0_deg_);
@@ -114,9 +118,7 @@ public:
       });
 
     // 出力トピック
-    target_roll_pub_ = this->create_publisher<std_msgs::msg::Float64>("/joystick/target_roll", 10);
     calc_result_pub_ = this->create_publisher<std_msgs::msg::Float64MultiArray>("/joystick/calc_results", 10000);
-    twist_pub_ = this->create_publisher<geometry_msgs::msg::Twist>("/real_robot_hum/twist", 10);
 
     // 入力トピック
     robot_errors_sub_ = this->create_subscription<std_msgs::msg::Float64MultiArray>(
@@ -234,7 +236,6 @@ private:
     if (!use_csv_errors_ && !errors_received_) {
       RCLCPP_WARN_THROTTLE(this->get_logger(), *this->get_clock(), 5000,
                            "Unityからの誤差データ(target/robot_errors)を待機中...");
-      publish_twist(0.0, 0.0, 0.0);
       return;
     }
 
@@ -273,14 +274,15 @@ private:
     double v_xi = 0.0, v_eta = 0.0, u = 0.0;
     inversely_optimal_control(current_e2, current_e3, V, v_r, v_xi, v_eta, u);
 
-    // 目標ロール角の計算と出力
-    double phi_com_y = -u / k_w_;
-    auto target_roll_msg = std_msgs::msg::Float64();
-    target_roll_msg.data = phi_com_y;
-    if (publish_control_output_) {
-      target_roll_pub_->publish(target_roll_msg);
+    // IOC出力はcalc_results経由でRLS統合ノードへ渡す。
+    double phi_com_y = 0.0;
+    if (std::abs(k_w_) > 1e-9) {
+      phi_com_y = std::clamp(-u / k_w_, -max_control_roll_, max_control_roll_);
+    } else {
+      RCLCPP_WARN_THROTTLE(
+        this->get_logger(), *this->get_clock(), 5000,
+        "k_wがゼロに近いため、IOCの操舵出力を無効化します");
     }
-
     // CSV用ログデータの出力
     auto calc_result_msg = std_msgs::msg::Float64MultiArray();
     calc_result_msg.data = {
@@ -308,21 +310,7 @@ private:
     robot_theta_ += omega * dt_;
     robot_theta_ = normalize_angle(robot_theta_);
 
-    // UnityへTwist送信
-    if (publish_control_output_) {
-      publish_twist(v_xi, v_eta, omega);
-    }
-
     step_count_++;
-  }
-
-  void publish_twist(double v_xi, double v_eta, double u)
-  {
-    geometry_msgs::msg::Twist twist_msg;
-    twist_msg.linear.x = v_xi;
-    twist_msg.linear.y = v_eta;
-    twist_msg.angular.z = u;
-    twist_pub_->publish(twist_msg);
   }
 
   static double normalize_angle(double angle)
@@ -340,19 +328,14 @@ private:
     double a = k_2_ * e_2 * (v_r * std::sin(e_3) - V * std::sin(beta)) + k_3_ * e_3 * w_r;
     double b = -k_3_ * e_3;
 
-    double b_square = b * b;
-    if (b_square < 1e-12) {
-      u = 0.0;
-    } else {
-      double p = (a + std::sqrt(a * a + b_square * b_square)) / b_square + c_0_;
-      u = -p * b;
-    }
+    const double b_square = b * b;
+    const double denominator = b_square + ioc_damping_;
+    const double p = (a + std::sqrt(a * a + b_square * b_square)) / denominator + c_0_;
+    u = -p * b;
   }
 
   // ROS 2 オブジェクト
-  rclcpp::Publisher<std_msgs::msg::Float64>::SharedPtr target_roll_pub_;
   rclcpp::Publisher<std_msgs::msg::Float64MultiArray>::SharedPtr calc_result_pub_;
-  rclcpp::Publisher<geometry_msgs::msg::Twist>::SharedPtr twist_pub_;
 
   rclcpp::Subscription<std_msgs::msg::Float64MultiArray>::SharedPtr robot_errors_sub_;
   rclcpp::Subscription<std_msgs::msg::Float64MultiArray>::SharedPtr arduino_state_sub_;
@@ -362,7 +345,7 @@ private:
 
   // 制御パラメータ
   double alpha_, k_2_, k_3_, c_0_, dt_;
-  double k_v_, k_w_, rho_;
+  double k_v_, k_w_, rho_, ioc_damping_, max_control_roll_;
   double x0_, y0_, theta0_deg_;
 
   // CSV参照エラーモード用
@@ -376,7 +359,6 @@ private:
   int step_count_ = 0;
   bool errors_received_ = false;
   bool arduino_received_ = false;
-  bool publish_control_output_ = true;
   double observed_vr_ = 0.0;
   double unity_e2_ = 0.0;
   double unity_e3_ = 0.0;

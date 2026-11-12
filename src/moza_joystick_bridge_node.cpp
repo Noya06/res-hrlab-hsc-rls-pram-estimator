@@ -20,7 +20,7 @@ class MozaJoystickBridgeNode : public rclcpp::Node
 public:
   MozaJoystickBridgeNode() : Node("moza_joystick_bridge_node")
   {
-    this->declare_parameter<std::string>("device", "/dev/input/event5");
+    this->declare_parameter<std::string>("device", "/dev/input/event4");
     this->declare_parameter<int>("axis_x_code", ABS_Y);
     this->declare_parameter<int>("axis_y_code", ABS_X);
     this->declare_parameter<double>("axis_center", 32767.5);

@@ -8,7 +8,7 @@ import matplotlib.pyplot as plt
 # 1. データ読み込み
 # ---------------------------------------------------------
 workspace_dir = Path(__file__).resolve().parents[3]
-filename = workspace_dir / 'data' / 'ref_hum_onlyleft.csv'
+filename = workspace_dir / 'data' / 'result_20261112_112508_steps10000.csv'
 df = pd.read_csv(filename, comment='#')
 
 # 時間刻み dt の計算

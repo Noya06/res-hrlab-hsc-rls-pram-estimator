@@ -16,7 +16,17 @@ def generate_launch_description():
         'steps', default_value='10000', description='総シミュレーションステップ数'
     )
     k2_arg = DeclareLaunchArgument('k_2', default_value='20.0', description='IOC制御ゲイン k2')
-    k3_arg = DeclareLaunchArgument('k_3', default_value='0.5', description='IOC制御ゲイン k3')
+    k3_arg = DeclareLaunchArgument('k_3', default_value='1.0', description='IOC制御ゲイン k3')
+    ioc_alpha_arg = DeclareLaunchArgument(
+        'ioc_alpha',
+        default_value='0.5',
+        description='IOCの速度方向補正係数 alpha',
+    )
+    k_w_arg = DeclareLaunchArgument(
+        'k_w',
+        default_value='100.0',
+        description='角速度ゲイン。0.0でジョイスティック操舵による旋回を無効化',
+    )
     forward_speed_arg = DeclareLaunchArgument(
         'forward_speed',
         default_value='1.0',
@@ -52,6 +62,11 @@ def generate_launch_description():
         default_value='1.0',
         description='ジョイスティック左右端での最大旋回入力 [rad/s相当]',
     )
+    ioc_damping_arg = DeclareLaunchArgument(
+        'ioc_damping',
+        default_value='0.001',
+        description='IOCの特異点を正則化するダンピング項',
+    )
     invert_steering_arg = DeclareLaunchArgument(
         'invert_steering',
         default_value='true',
@@ -74,10 +89,11 @@ def generate_launch_description():
         parameters=[{
             'dt': 0.01,
             # IOCの制御ゲインと速度計算設定
+            'alpha': LaunchConfiguration('ioc_alpha'),
             'k_2': LaunchConfiguration('k_2'),
             'k_3': LaunchConfiguration('k_3'),
             'k_v': 1.0,
-            'k_w': 1.0,
+            'k_w': LaunchConfiguration('k_w'),
             'forward_speed': LaunchConfiguration('forward_speed'),
             'use_path_tracking': LaunchConfiguration('use_path_tracking'),
             'override_constant_forward_speed': LaunchConfiguration(
@@ -85,9 +101,9 @@ def generate_launch_description():
             ),
             'max_deviation_B': LaunchConfiguration('max_deviation_B'),
             'max_roll_rad': LaunchConfiguration('max_roll_rad'),
+            'ioc_damping': LaunchConfiguration('ioc_damping'),
+            'max_control_roll': LaunchConfiguration('max_roll_rad'),
             'invert_steering': LaunchConfiguration('invert_steering'),
-            # /real_robot_hum/twistと/joystick/target_rollの二重出力を防止
-            'publish_control_output': False,
         }],
         output='screen'
     )
@@ -113,7 +129,7 @@ def generate_launch_description():
         name='moza_joystick_bridge_node',
         parameters=[{
             # 使用するデバイスと軸の正規化設定
-            'device': '/dev/input/event5',
+            'device': '/dev/input/event4',
             'axis_center': 32767.5,
             'axis_scale': 32767.5,
             'deadzone': 0.02,
@@ -136,10 +152,10 @@ def generate_launch_description():
         name='moza_ffb_node',
         parameters=[{
             # FFBの比例・微分ゲインと安全側の出力制限
-            'p_gain': 1000.0,
+            'p_gain': 500.0,
             'd_gain': 0.0,
             'force_filter_alpha': 0.15, # 1.0でフィルタなし
-            'max_force_level': 10000, # 最大出力レベル(0-32767)
+            'max_force_level': 20000, # 最大出力レベル(0-32767)
         }],
         output='screen',
         condition=IfCondition(LaunchConfiguration('use_ffb'))
@@ -171,14 +187,14 @@ def generate_launch_description():
         executable='rlshsc_integrator_node',
         name='rlshsc_integrator_node',
         parameters=[{
-            # IOC/RLS入力の列番号と速度出力設定
-            'k_w': 1.0,
+            # IOC/RLS入力の列番号とUnityへのphi_hum出力設定
             'phi_ioc_index': 10,
             'feature_start_index': 4,
             'feature_count': 2,
             'joystick_center': 512.0,
             'joystick_max_deviation': LaunchConfiguration('max_deviation_B'),
             'max_roll_rad': LaunchConfiguration('max_roll_rad'),
+            'max_target_roll': LaunchConfiguration('max_roll_rad'),
             'invert_steering': LaunchConfiguration('invert_steering'),
         }],
         output='screen',
@@ -190,6 +206,8 @@ def generate_launch_description():
         steps_arg,
         k2_arg,
         k3_arg,
+        ioc_alpha_arg,
+        k_w_arg,
         forward_speed_arg,
         path_tracking_arg,
         use_moza_arg,
@@ -197,6 +215,7 @@ def generate_launch_description():
         override_constant_forward_speed_arg,
         max_deviation_b_arg,
         max_roll_rad_arg,
+        ioc_damping_arg,
         invert_steering_arg,
         rls_csv_path_arg,
         rls_process_csv_arg,

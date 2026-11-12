@@ -98,6 +98,7 @@ ros2 topic echo /joystick/calc_results
 | `override_constant_forward_speed` | MOZAの前後入力を無視して固定速度で走行するか | `true` |
 | `max_deviation_B` | ジョイスティック左右軸の中心から端までの値 | `512.0` |
 | `max_roll_rad` | ジョイスティック左右端での最大旋回入力 | `1.0` |
+| `ioc_damping` | IOCの`e_3`付近の特異点を正則化するダンピング項 | `0.001` |
 | `invert_steering` | ジョイスティック左右軸と旋回方向を反転するか | `true` |
 | `steps` | CSV記録ステップ数 | `10000` |
 | `output_dir` | CSV保存先 | `data/datafiles` |
@@ -118,18 +119,13 @@ ros2 launch res-hr-simulate-hsc-ros2-unity launch.py --show-args
 phi_com_y = k_2 * e2 + k_3 * e3
 ```
 
-`use_path_tracking:=true`の場合:
+IOCは制御用のTwistやFFB指令を直接Publishしません。計算結果を
+`/joystick/calc_results`へPublishし、RLS推定ノードとRLS-HSC統合ノードを
+経由した出力だけが制御に使われます。
 
-- 前進速度: `forward_speed`
-- 操舵速度: `phi_com_y`
-
-を`/real_robot_hum/twist`へ送信します。
-
-```text
-Twist.linear.x  = forward_speed
-Twist.linear.y  = 0
-Twist.angular.z = k_w * phi_com_y
-```
+IOCの分母には`ioc_damping`を加えて`e_3`が0に近いときの発散を抑え、
+`phi_com_y`は`±max_roll_rad`に制限します。RLS補正後にFFBへ送る
+`target_roll`も同じ範囲に制限されます。
 
 `use_path_tracking:=false`の場合は、`/joystick/joystick_state`の入力を使用します。
 
@@ -214,8 +210,8 @@ target_roll = phi_IOC + (xi^T * theta_hat)
 `/joystick/calc_results`の`[e_2,e_3]`と`/rls/theta`を使用し、
 加算後の値を`/joystick/target_roll`と`/rlshsc/phi_com_y`へ出力します。
 一方、`/joystick/joystick_state`から計算した`phi_hum`を
-`/real_robot_hum/twist.angular.z`へ出力するため、Unityは人間のジョイスティック入力を受け取ります。
-二重出力を防ぐため、launch起動時はIOCノード自身の制御出力を無効化しています。
+RLS-HSC統合ノードが`/real_robot_hum/twist.angular.z`へ出力します。
+`/real_robot_hum/twist`の発行元はRLS-HSC統合ノードだけです。
 
 ```bash
 ros2 launch res-hr-simulate-hsc-ros2-unity launch.py

@@ -16,23 +16,26 @@ public:
   RlshscIntegratorNode()
   : Node("rlshsc_integrator_node")
   {
-    declare_parameter<double>("k_w", 1.0);
     declare_parameter<int>("phi_ioc_index", 10);
     declare_parameter<int>("feature_start_index", 4);
     declare_parameter<int>("feature_count", 2);
     declare_parameter<double>("joystick_center", 512.0);
     declare_parameter<double>("joystick_max_deviation", 512.0);
     declare_parameter<double>("max_roll_rad", 1.0);
+    declare_parameter<double>("max_target_roll", 1.0);
     declare_parameter<bool>("invert_steering", false);
 
-    get_parameter("k_w", k_w_);
     get_parameter("phi_ioc_index", phi_ioc_index_);
     get_parameter("feature_start_index", feature_start_index_);
     get_parameter("feature_count", feature_count_);
     get_parameter("joystick_center", joystick_center_);
     get_parameter("joystick_max_deviation", joystick_max_deviation_);
     get_parameter("max_roll_rad", max_roll_rad_);
+    get_parameter("max_target_roll", max_target_roll_);
     get_parameter("invert_steering", invert_steering_);
+    if (max_target_roll_ <= 0.0) {
+      throw std::invalid_argument("max_target_roll must be positive");
+    }
     if (feature_count_ <= 0 || feature_start_index_ < 0 || phi_ioc_index_ < 0) {
       throw std::invalid_argument("feature indices must be non-negative and feature_count positive");
     }
@@ -47,7 +50,7 @@ public:
       "/joystick/calc_results", 100,
       std::bind(&RlshscIntegratorNode::calc_callback, this, std::placeholders::_1));
     target_roll_pub_ = create_publisher<std_msgs::msg::Float64>("/joystick/target_roll", 10);
-    twist_pub_ = create_publisher<geometry_msgs::msg::Twist>("/real_robot_hum/twist", 10);
+    twist_pub_ = create_publisher<geometry_msgs::msg::Twist>("/real_robot/twist", 10);
     phi_pub_ = create_publisher<std_msgs::msg::Float64>("/rlshsc/phi_com_y", 10);
     RCLCPP_INFO(get_logger(), "RLS-HSC統合ノードを起動しました (IOC + RLS加算)");
   }
@@ -95,7 +98,8 @@ private:
     }
     const double phi_ioc = msg->data[phi_ioc_index_];
     // FFBへ送る指令はIOC出力とRLS補正値の加算値とする。
-    const double target_roll = phi_ioc + rls_prediction;
+    const double target_roll = std::clamp(
+      phi_ioc + rls_prediction, -max_target_roll_, max_target_roll_);
 
     std_msgs::msg::Float64 phi_msg;
     phi_msg.data = target_roll;
@@ -109,18 +113,18 @@ private:
     }
     if (joystick_received_) {
       // UnityへはFFB指令ではなく、ジョイスティックから戻った人間入力を送る。
-      twist.angular.z = k_w_ * phi_hum_;
+      twist.angular.z = phi_hum_;
       twist_pub_->publish(twist);
     }
   }
 
-  double k_w_{1.0};
   int phi_ioc_index_{10};
   int feature_start_index_{4};
   int feature_count_{2};
   double joystick_center_{512.0};
   double joystick_max_deviation_{512.0};
   double max_roll_rad_{1.0};
+  double max_target_roll_{1.0};
   bool invert_steering_{false};
   bool theta_received_{false};
   bool joystick_received_{false};
