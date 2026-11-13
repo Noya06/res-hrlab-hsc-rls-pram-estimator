@@ -24,7 +24,7 @@ def generate_launch_description():
     )
     k_w_arg = DeclareLaunchArgument(
         'k_w',
-        default_value='100.0',
+        default_value='1.0',
         description='角速度ゲイン。0.0でジョイスティック操舵による旋回を無効化',
     )
     forward_speed_arg = DeclareLaunchArgument(
@@ -62,11 +62,6 @@ def generate_launch_description():
         default_value='1.0',
         description='ジョイスティック左右端での最大旋回入力 [rad/s相当]',
     )
-    ioc_damping_arg = DeclareLaunchArgument(
-        'ioc_damping',
-        default_value='0.001',
-        description='IOCの特異点を正則化するダンピング項',
-    )
     invert_steering_arg = DeclareLaunchArgument(
         'invert_steering',
         default_value='true',
@@ -101,7 +96,6 @@ def generate_launch_description():
             ),
             'max_deviation_B': LaunchConfiguration('max_deviation_B'),
             'max_roll_rad': LaunchConfiguration('max_roll_rad'),
-            'ioc_damping': LaunchConfiguration('ioc_damping'),
             'max_control_roll': LaunchConfiguration('max_roll_rad'),
             'invert_steering': LaunchConfiguration('invert_steering'),
         }],
@@ -152,10 +146,10 @@ def generate_launch_description():
         name='moza_ffb_node',
         parameters=[{
             # FFBの比例・微分ゲインと安全側の出力制限
-            'p_gain': 500.0,
+            'p_gain': 30000.0,
             'd_gain': 0.0,
-            'force_filter_alpha': 0.15, # 1.0でフィルタなし
-            'max_force_level': 20000, # 最大出力レベル(0-32767)
+            'force_filter_alpha': 1.0, # 1.0でフィルタなし
+            'max_force_level': 30000, # 最大出力レベル(0-32767)
         }],
         output='screen',
         condition=IfCondition(LaunchConfiguration('use_ffb'))
@@ -215,7 +209,6 @@ def generate_launch_description():
         override_constant_forward_speed_arg,
         max_deviation_b_arg,
         max_roll_rad_arg,
-        ioc_damping_arg,
         invert_steering_arg,
         rls_csv_path_arg,
         rls_process_csv_arg,

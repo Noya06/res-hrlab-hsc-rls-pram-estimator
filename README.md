@@ -98,7 +98,6 @@ ros2 topic echo /joystick/calc_results
 | `override_constant_forward_speed` | MOZAの前後入力を無視して固定速度で走行するか | `true` |
 | `max_deviation_B` | ジョイスティック左右軸の中心から端までの値 | `512.0` |
 | `max_roll_rad` | ジョイスティック左右端での最大旋回入力 | `1.0` |
-| `ioc_damping` | IOCの`e_3`付近の特異点を正則化するダンピング項 | `0.001` |
 | `invert_steering` | ジョイスティック左右軸と旋回方向を反転するか | `true` |
 | `steps` | CSV記録ステップ数 | `10000` |
 | `output_dir` | CSV保存先 | `data/datafiles` |
@@ -123,7 +122,6 @@ IOCは制御用のTwistやFFB指令を直接Publishしません。計算結果�
 `/joystick/calc_results`へPublishし、RLS推定ノードとRLS-HSC統合ノードを
 経由した出力だけが制御に使われます。
 
-IOCの分母には`ioc_damping`を加えて`e_3`が0に近いときの発散を抑え、
 `phi_com_y`は`±max_roll_rad`に制限します。RLS補正後にFFBへ送る
 `target_roll`も同じ範囲に制限されます。
 

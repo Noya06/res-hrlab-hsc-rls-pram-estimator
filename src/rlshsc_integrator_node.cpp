@@ -98,8 +98,9 @@ private:
     }
     const double phi_ioc = msg->data[phi_ioc_index_];
     // FFBへ送る指令はIOC出力とRLS補正値の加算値とする。
-    const double target_roll = std::clamp(
-      phi_ioc + rls_prediction, -max_target_roll_, max_target_roll_);
+    //const double target_roll = std::clamp(
+    //  phi_ioc + rls_prediction, -max_target_roll_, max_target_roll_);
+    const double target_roll =   phi_ioc;// + rls_prediction;
 
     std_msgs::msg::Float64 phi_msg;
     phi_msg.data = target_roll;

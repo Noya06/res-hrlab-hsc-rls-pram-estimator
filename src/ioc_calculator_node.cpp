@@ -33,7 +33,6 @@ public:
     this->declare_parameter<double>("k_v", 1.0);
     this->declare_parameter<double>("k_w", 1.0);
     this->declare_parameter<double>("rho", 0.0);
-    this->declare_parameter<double>("ioc_damping", 1e-3);
     this->declare_parameter<double>("max_control_roll", 1.0);
 
     // CSV参照エラー使用モード用のパラメータ宣言
@@ -48,11 +47,9 @@ public:
     this->get_parameter("k_v", k_v_);
     this->get_parameter("k_w", k_w_);
     this->get_parameter("rho", rho_);
-    this->get_parameter("ioc_damping", ioc_damping_);
     this->get_parameter("max_control_roll", max_control_roll_);
-    if (ioc_damping_ <= 0.0 || max_control_roll_ <= 0.0) {
-      throw std::invalid_argument(
-        "ioc_damping and max_control_roll must be positive");
+    if (max_control_roll_ <= 0.0) {
+      throw std::invalid_argument("max_control_roll must be positive");
     }
     this->get_parameter("x0", x0_);
     this->get_parameter("y0", y0_);
@@ -329,9 +326,12 @@ private:
     double b = -k_3_ * e_3;
 
     const double b_square = b * b;
-    const double denominator = b_square + ioc_damping_;
-    const double p = (a + std::sqrt(a * a + b_square * b_square)) / denominator + c_0_;
-    u = -p * b;
+    if (b_square < 1e-12) {
+      u = 0.0;
+    } else {
+      const double p = (a + std::sqrt(a * a + b_square * b_square)) / b_square + c_0_;
+      u = -p * b;
+    }
   }
 
   // ROS 2 オブジェクト
@@ -345,7 +345,7 @@ private:
 
   // 制御パラメータ
   double alpha_, k_2_, k_3_, c_0_, dt_;
-  double k_v_, k_w_, rho_, ioc_damping_, max_control_roll_;
+  double k_v_, k_w_, rho_, max_control_roll_;
   double x0_, y0_, theta0_deg_;
 
   // CSV参照エラーモード用
