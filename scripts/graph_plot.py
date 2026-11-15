@@ -8,7 +8,7 @@ import matplotlib.pyplot as plt
 # 1. データ読み込み
 # ---------------------------------------------------------
 workspace_dir = Path(__file__).resolve().parents[3]
-filename = workspace_dir / 'data' / 'result_20261112_112508_steps10000.csv'
+filename = workspace_dir / 'data' / 'result_20261115_164620_steps10000.csv'
 df = pd.read_csv(filename, comment='#')
 
 # 時間刻み dt の計算
@@ -92,12 +92,20 @@ axs[1, 0].set_xlabel('Time [s]')
 axs[1, 0].set_ylabel('$e_3$ [rad]')
 axs[1, 0].grid(True, linestyle=':', alpha=0.7)
 
-# --- 右下: phi_hum_y - time ---
-axs[1, 1].plot(df['time'], df['phi_hum_y'], color='purple', linewidth=2)
-axs[1, 1].set_title('Human Input $\phi_{hum\_y}$ over Time')
+# --- 右下: IOC/RLS control signals - time ---
+axs[1, 1].plot(
+    df['time'], df['phi_ioc'], color='purple', linewidth=2, label=r'$\phi_{ioc}$')
+axs[1, 1].plot(
+    df['time'], df['rls_prediction'], color='teal', linewidth=2,
+    label='RLS prediction')
+axs[1, 1].plot(
+    df['time'], df['target_roll'], color='black', linestyle='--',
+    linewidth=2, label=r'$\phi_{ioc}$ + RLS')
+axs[1, 1].set_title('IOC and RLS Control Signals over Time')
 axs[1, 1].set_xlabel('Time [s]')
-axs[1, 1].set_ylabel('$\phi_{hum\_y}$')
+axs[1, 1].set_ylabel('Control input')
 axs[1, 1].grid(True, linestyle=':', alpha=0.7)
+axs[1, 1].legend()
 
 # 全体レイアウト調整後に上下の間隔(hspace)を広げる
 plt.tight_layout()
