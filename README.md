@@ -215,6 +215,17 @@ RLS実装は`rls_estimator_node.cpp`内にあり、`forgetting_factor`（既定�
 ```bash
 ros2 launch res-hr-simulate-hsc-ros2-unity launch.py forgetting_factor:=0.995
 ```
+パラメータ更新を行わず、初期パラメータの値で固定して動かす場合は、
+`rls_update_enabled:=false`を指定します。
+
+```bash
+ros2 launch res-hr-simulate-hsc-ros2-unity launch.py \
+  rls_update_enabled:=false
+```
+
+通常モードでは、RLSノードが接続された端末でスペースキーを押すと、
+その時点の推定値を保持して以後のパラメータ更新を停止します。
+固定後も`/rls/theta`の現在値は各入力サンプルで再配信されます。
 更新後の共分散は数値誤差による非対称化を防ぐため対称化されます。
 
 ### rlshsc_integrator_node

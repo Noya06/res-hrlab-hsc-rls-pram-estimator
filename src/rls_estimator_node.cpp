@@ -1,11 +1,15 @@
 #include <algorithm>
+#include <chrono>
 #include <cmath>
+#include <fcntl.h>
 #include <fstream>
 #include <functional>
 #include <memory>
 #include <sstream>
 #include <stdexcept>
 #include <string>
+#include <termios.h>
+#include <unistd.h>
 #include <vector>
 
 #include <rclcpp/rclcpp.hpp>
@@ -97,6 +101,8 @@ public:
     return theta_;
   }
 
+  const std::vector<double> & parameters() const noexcept { return theta_; }
+
 private:
   std::vector<double> theta_;
   std::vector<std::vector<double>> covariance_;
@@ -111,7 +117,8 @@ public:
   {
     declare_parameter<int>("parameter_count", 2);
     declare_parameter<double>("initial_covariance", 1.0e3);
-    declare_parameter<double>("forgetting_factor", 0.99); //1.0に近いほど過去のデータを重視する.0.99なら直近100サンプル
+    declare_parameter<double>("forgetting_factor", 0.99);
+    declare_parameter<bool>("update_enabled", true);
     declare_parameter<std::vector<double>>("initial_parameters", std::vector<double>{});
     declare_parameter<std::vector<int64_t>>("feature_indices", {4, 5});
     declare_parameter<int>("phi_ref_index", 11);
@@ -123,6 +130,7 @@ public:
     int parameter_count;
     double initial_covariance;
     double forgetting_factor;
+    get_parameter("update_enabled", update_enabled_);
     std::vector<double> initial_parameters;
     std::vector<int64_t> feature_indices;
     get_parameter("parameter_count", parameter_count);
@@ -155,6 +163,10 @@ public:
     sample_sub_ = create_subscription<std_msgs::msg::Float64MultiArray>(
       "/joystick/calc_results", 100,
       std::bind(&RlsEstimatorNode::sample_callback, this, std::placeholders::_1));
+    keyboard_timer_ = create_wall_timer(
+      std::chrono::milliseconds(50),
+      std::bind(&RlsEstimatorNode::poll_keyboard, this));
+    configure_keyboard();
 
     if (process_csv_on_start_ && !csv_path_.empty()) {
       process_csv();
@@ -162,6 +174,14 @@ public:
     RCLCPP_INFO(
       this->get_logger(), "RLS推定ノードを起動しました (次元=%d, 忘却係数=%.6f)",
       parameter_count, forgetting_factor);
+    RCLCPP_INFO(
+      this->get_logger(), "RLSパラメータ更新: %s。スペースキーで現在値を固定します。",
+      update_enabled_ ? "有効" : "無効（固定）");
+  }
+
+  ~RlsEstimatorNode() override
+  {
+    restore_keyboard();
   }
 
 private:
@@ -186,12 +206,67 @@ private:
   void update_and_publish(double phi_ref, double phi_src, const std::vector<double> & features)
   {
     try {
-      const auto theta = estimator_->update(phi_ref, phi_src, features);
+      const auto theta = update_enabled_
+        ? estimator_->update(phi_ref, phi_src, features)
+        : estimator_->parameters();
       std_msgs::msg::Float64MultiArray msg;
       msg.data = theta;
       theta_pub_->publish(msg);
     } catch (const std::exception & error) {
       RCLCPP_ERROR_THROTTLE(get_logger(), *get_clock(), 5000, "RLS更新をスキップ: %s", error.what());
+    }
+  }
+
+  void configure_keyboard()
+  {
+    if (!isatty(STDIN_FILENO) || tcgetattr(STDIN_FILENO, &original_terminal_) != 0) {
+      return;
+    }
+
+    terminal_flags_ = fcntl(STDIN_FILENO, F_GETFL, 0);
+    if (terminal_flags_ < 0) {
+      return;
+    }
+
+    termios raw_terminal = original_terminal_;
+    raw_terminal.c_lflag &= static_cast<tcflag_t>(~(ICANON | ECHO));
+    raw_terminal.c_cc[VMIN] = 0;
+    raw_terminal.c_cc[VTIME] = 0;
+    if (tcsetattr(STDIN_FILENO, TCSANOW, &raw_terminal) != 0) {
+      return;
+    }
+    terminal_configured_ = true;
+    if (fcntl(STDIN_FILENO, F_SETFL, terminal_flags_ | O_NONBLOCK) != 0) {
+      restore_keyboard();
+      return;
+    }
+    RCLCPP_INFO(get_logger(), "スペースキー監視を有効化しました");
+  }
+
+  void restore_keyboard()
+  {
+    if (!terminal_configured_) {
+      return;
+    }
+    tcsetattr(STDIN_FILENO, TCSANOW, &original_terminal_);
+    fcntl(STDIN_FILENO, F_SETFL, terminal_flags_);
+    terminal_configured_ = false;
+  }
+
+  void poll_keyboard()
+  {
+    if (!terminal_configured_ || !update_enabled_) {
+      return;
+    }
+
+    char key;
+    while (read(STDIN_FILENO, &key, sizeof(key)) > 0) {
+      if (key == ' ') {
+        update_enabled_ = false;
+        RCLCPP_WARN(
+          get_logger(), "スペースキーを検出しました。RLSパラメータを現在値で固定します。");
+        return;
+      }
     }
   }
 
@@ -285,6 +360,11 @@ private:
   std::string csv_path_;
   std::string csv_output_path_;
   bool process_csv_on_start_{false};
+  bool update_enabled_{true};
+  bool terminal_configured_{false};
+  int terminal_flags_{0};
+  termios original_terminal_{};
+  rclcpp::TimerBase::SharedPtr keyboard_timer_;
 };
 
 int main(int argc, char ** argv)

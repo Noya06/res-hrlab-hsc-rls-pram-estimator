@@ -42,6 +42,11 @@ def generate_launch_description():
         default_value='1.0',
         description='RLS忘却係数 (0 < forgetting_factor <= 1)',
     )
+    rls_update_enabled_arg = DeclareLaunchArgument(
+        'rls_update_enabled',
+        default_value='true',
+        description='RLSパラメータを更新するか。falseで初期値を固定',
+    )
     forward_speed_arg = DeclareLaunchArgument(
         'forward_speed',
         default_value='1.0',
@@ -183,6 +188,7 @@ def generate_launch_description():
             'phi_ref_index': 11,
             'phi_src_index': 10,
             'forgetting_factor': LaunchConfiguration('forgetting_factor'),
+            'update_enabled': LaunchConfiguration('rls_update_enabled'),
             'csv_path': LaunchConfiguration('rls_csv_path'),
             'process_csv_on_start': LaunchConfiguration('rls_process_csv'),
         }],
@@ -223,6 +229,7 @@ def generate_launch_description():
         ioc_gain_arg,
         rls_gain_arg,
         forgetting_factor_arg,
+        rls_update_enabled_arg,
         forward_speed_arg,
         path_tracking_arg,
         use_moza_arg,
