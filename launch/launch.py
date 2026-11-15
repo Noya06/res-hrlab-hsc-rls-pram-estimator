@@ -27,6 +27,16 @@ def generate_launch_description():
         default_value='1.0',
         description='角速度ゲイン。0.0でジョイスティック操舵による旋回を無効化',
     )
+    ioc_gain_arg = DeclareLaunchArgument(
+        'ioc_gain',
+        default_value='1.0',
+        description='RLS統合時のIOC出力ゲイン',
+    )
+    rls_gain_arg = DeclareLaunchArgument(
+        'rls_gain',
+        default_value='1.5',
+        description='RLS統合時のRLS補正出力ゲイン',
+    )
     forward_speed_arg = DeclareLaunchArgument(
         'forward_speed',
         default_value='1.0',
@@ -189,6 +199,8 @@ def generate_launch_description():
             'joystick_max_deviation': LaunchConfiguration('max_deviation_B'),
             'max_roll_rad': LaunchConfiguration('max_roll_rad'),
             'max_target_roll': LaunchConfiguration('max_roll_rad'),
+            'ioc_gain': LaunchConfiguration('ioc_gain'),
+            'rls_gain': LaunchConfiguration('rls_gain'),
             'invert_steering': LaunchConfiguration('invert_steering'),
         }],
         output='screen',
@@ -202,6 +214,8 @@ def generate_launch_description():
         k3_arg,
         ioc_alpha_arg,
         k_w_arg,
+        ioc_gain_arg,
+        rls_gain_arg,
         forward_speed_arg,
         path_tracking_arg,
         use_moza_arg,

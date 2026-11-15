@@ -23,6 +23,8 @@ public:
     declare_parameter<double>("joystick_max_deviation", 512.0);
     declare_parameter<double>("max_roll_rad", 1.0);
     declare_parameter<double>("max_target_roll", 1.0);
+    declare_parameter<double>("ioc_gain", 1.0);
+    declare_parameter<double>("rls_gain", 1.0);
     declare_parameter<bool>("invert_steering", false);
 
     get_parameter("phi_ioc_index", phi_ioc_index_);
@@ -32,9 +34,12 @@ public:
     get_parameter("joystick_max_deviation", joystick_max_deviation_);
     get_parameter("max_roll_rad", max_roll_rad_);
     get_parameter("max_target_roll", max_target_roll_);
+    get_parameter("ioc_gain", ioc_gain_);
+    get_parameter("rls_gain", rls_gain_);
     get_parameter("invert_steering", invert_steering_);
-    if (max_target_roll_ <= 0.0) {
-      throw std::invalid_argument("max_target_roll must be positive");
+    if (max_target_roll_ <= 0.0 || ioc_gain_ < 0.0 || rls_gain_ < 0.0) {
+      throw std::invalid_argument(
+        "max_target_roll must be positive and ioc_gain/rls_gain must be non-negative");
     }
     if (feature_count_ <= 0 || feature_start_index_ < 0 || phi_ioc_index_ < 0) {
       throw std::invalid_argument("feature indices must be non-negative and feature_count positive");
@@ -61,6 +66,8 @@ public:
     if (msg->data.size() < 2) {
       return;
     }
+    joystick_x_ = msg->data[0];
+    joystick_y_ = msg->data[1];
     const double normalized = std::clamp(
       (msg->data[1] - joystick_center_) / joystick_max_deviation_, -1.0, 1.0);
     phi_hum_ = (invert_steering_ ? -1.0 : 1.0) * normalized * max_roll_rad_;
@@ -99,7 +106,9 @@ private:
     }
     const double phi_ioc = msg->data[phi_ioc_index_];
     // FFBへ送る指令はIOC出力とRLS補正値の加算値とする。
-    const double target_roll = std::clamp(phi_ioc + rls_prediction, -max_target_roll_, max_target_roll_);
+    const double target_roll = std::clamp(
+      ioc_gain_ * phi_ioc + rls_gain_ * rls_prediction,
+      -max_target_roll_, max_target_roll_);
 
     std_msgs::msg::Float64 phi_msg;
     phi_msg.data = target_roll;
@@ -116,7 +125,11 @@ private:
       phi_ioc,
       rls_prediction,
       target_roll,
+      joystick_x_,
+      joystick_y_,
+      phi_hum_,
     };
+    log_msg.data.insert(log_msg.data.end(), theta_.begin(), theta_.end());
     log_pub_->publish(log_msg);
 
     geometry_msgs::msg::Twist twist;
@@ -138,10 +151,14 @@ private:
   double joystick_max_deviation_{512.0};
   double max_roll_rad_{1.0};
   double max_target_roll_{1.0};
+  double ioc_gain_{1.0};
+  double rls_gain_{1.0};
   bool invert_steering_{false};
   bool theta_received_{false};
   bool joystick_received_{false};
   double phi_hum_{0.0};
+  double joystick_x_{0.0};
+  double joystick_y_{0.0};
   std::vector<double> theta_;
   rclcpp::Subscription<std_msgs::msg::Float64MultiArray>::SharedPtr theta_sub_;
   rclcpp::Subscription<std_msgs::msg::Float64MultiArray>::SharedPtr joystick_sub_;

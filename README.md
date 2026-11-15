@@ -125,6 +125,15 @@ IOCは制御用のTwistやFFB指令を直接Publishしません。計算結果�
 `phi_com_y`は`±max_roll_rad`に制限します。RLS補正後にFFBへ送る
 `target_roll`も同じ範囲に制限されます。
 
+RLS-HSC統合時の出力は、次式で計算されます。
+
+```text
+target_roll = ioc_gain * phi_ioc + rls_gain * rls_prediction
+```
+
+`ioc_gain`と`rls_gain`はlaunch引数で調整でき、既定値はどちらも`1.0`です。
+例えばRLS補正を半分にする場合は`rls_gain:=0.5`を指定します。
+
 `use_path_tracking:=false`の場合は、`/joystick/joystick_state`の入力を使用します。
 
 - `potA`: 前進・後退入力
@@ -177,7 +186,9 @@ FFB出力には一次ローパスを適用し、急な反力変化を抑えて�
 
 `/rlshsc/calc_results`と`/real_robot_hum/state`を受信し、CSVへ保存します。
 CSVにはIOC出力`phi_ioc`、RLS補正値`rls_prediction`、および加算後の
-`target_roll`が記録されます。
+`target_roll`が記録されます。さらに、同じサンプル時刻のジョイスティック入力
+`joystick_x`、`joystick_y`、人間側へ戻った操舵角`phi_hum`、およびRLS推定パラメータ
+`rls_theta_0`以降も保存されます。
 
 ### rls_estimator_node
 
@@ -220,8 +231,17 @@ ros2 launch res-hr-simulate-hsc-ros2-unity launch.py
 記録列:
 
 ```text
-time,e_2,e_3,v_r,v_xi,phi_ioc,rls_prediction,target_roll,position_x,position_z,yaw
+time,e_2,e_3,v_r,v_xi,phi_ioc,rls_prediction,target_roll,position_x,position_z,yaw,
+joystick_x,joystick_y,phi_hum,rls_theta_0,rls_theta_1
 ```
+
+ログCSVは、`scripts/graph_plot.py`の`filename`を対象CSVに変更してから実行します。
+
+```bash
+python3 src/res-hrlab-hsc-rls-pram-estimator/scripts/graph_plot.py
+```
+
+既存の古いCSVに追加列がない場合、追加グラフは空欄として表示されます。
 
 `/real_robot_hum/state`の位置・姿勢データ:
 

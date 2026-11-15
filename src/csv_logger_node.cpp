@@ -5,6 +5,7 @@
 #include <iomanip>
 #include <memory>
 #include <sstream>
+#include <stdexcept>
 #include <string>
 #include <vector>
 
@@ -20,10 +21,15 @@ public:
     // パラメータの宣言（dt=0.01s の場合、10秒間で1000ステップ）
     this->declare_parameter<int>("steps", 10000);
     this->declare_parameter<std::string>("output_dir", "/home/hurolab/Programs/colcon_ws/data/datafiles");
+    this->declare_parameter<int>("rls_parameter_count", 2);
 
     // パラメータの取得
     this->get_parameter("steps", max_steps_);
     this->get_parameter("output_dir", output_dir_);
+    this->get_parameter("rls_parameter_count", rls_parameter_count_);
+    if (rls_parameter_count_ <= 0) {
+      throw std::invalid_argument("rls_parameter_count must be positive");
+    }
 
     // 計算結果トピックの購読
     calc_result_sub_ = this->create_subscription<std_msgs::msg::Float64MultiArray>(
@@ -91,7 +97,14 @@ private:
       return;
     }
 
-    if (msg->data.size() < 8) return;
+    const std::size_t expected_size = 11 + static_cast<std::size_t>(rls_parameter_count_);
+    if (msg->data.size() < expected_size) {
+      RCLCPP_WARN_THROTTLE(
+        this->get_logger(), *this->get_clock(), 5000,
+        "統合ログの列数が不足しています (received=%zu, expected=%zu)",
+        msg->data.size(), expected_size);
+      return;
+    }
 
     CsvRow row;
     row.time      = msg->data[0];
@@ -105,6 +118,10 @@ private:
     row.position_x = position_x_;
     row.position_z = position_z_;
     row.yaw = yaw_;
+    row.joystick_x = msg->data[8];
+    row.joystick_y = msg->data[9];
+    row.phi_hum = msg->data[10];
+    row.rls_parameters.assign(msg->data.begin() + 11, msg->data.begin() + expected_size);
 
     records_.push_back(row);
     step_count_++;
@@ -185,13 +202,22 @@ private:
     file << "# output_dir: " << output_dir_ << "\n";
     file << "# -----------------------------\n";
     file << "time,e_2,e_3,v_r,v_xi,phi_ioc,rls_prediction,target_roll,"
-            "position_x,position_z,yaw\n";
+            "position_x,position_z,yaw,joystick_x,joystick_y,phi_hum";
+    for (int i = 0; i < rls_parameter_count_; ++i) {
+      file << ",rls_theta_" << i;
+    }
+    file << "\n";
 
     for (const auto& r : records_) {
       file << r.time << "," << r.e_2 << "," << r.e_3 << "," << r.v_r << "," << r.v_xi
            << "," << r.phi_ioc << "," << r.rls_prediction << "," << r.target_roll
            << "," << r.position_x << "," << r.position_z
-           << "," << r.yaw << "\n";
+           << "," << r.yaw << "," << r.joystick_x << "," << r.joystick_y
+           << "," << r.phi_hum;
+      for (const auto value : r.rls_parameters) {
+        file << "," << value;
+      }
+      file << "\n";
     }
     
     file.close();
@@ -235,7 +261,8 @@ private:
 
   struct CsvRow {
     double time, e_2, e_3, v_r, v_xi, phi_ioc, rls_prediction, target_roll;
-    double position_x, position_z, yaw;
+    double position_x, position_z, yaw, joystick_x, joystick_y, phi_hum;
+    std::vector<double> rls_parameters;
   };
 
   rclcpp::Subscription<std_msgs::msg::Float64MultiArray>::SharedPtr calc_result_sub_;
@@ -247,6 +274,7 @@ private:
   rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr csv_saved_pub_;
   
   int max_steps_;
+  int rls_parameter_count_ = 2;
   std::string output_dir_;
   int step_count_ = 0;
   bool simulation_done_published_ = false;

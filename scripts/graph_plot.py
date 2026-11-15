@@ -8,7 +8,8 @@ import matplotlib.pyplot as plt
 # 1. データ読み込み
 # ---------------------------------------------------------
 workspace_dir = Path(__file__).resolve().parents[3]
-filename = workspace_dir / 'data' / 'result_20261115_164620_steps10000.csv'
+# プロット対象のCSV指定
+filename = workspace_dir / 'data' / 'result_20261115_182732_steps10000.csv'
 df = pd.read_csv(filename, comment='#')
 
 # 時間刻み dt の計算
@@ -66,7 +67,7 @@ plt.rcParams.update({
     'legend.fontsize': 13
 })
 
-fig, axs = plt.subplots(2, 2, figsize=(15, 12))
+fig, axs = plt.subplots(3, 2, figsize=(15, 16))
 
 # --- 左上: x-y 座標 (機体の動き vs 正解Path) ---
 axs[0, 0].plot(x, y, label='Vehicle Trajectory', color='blue', linewidth=2)
@@ -85,14 +86,14 @@ axs[0, 1].set_xlabel('Time [s]')
 axs[0, 1].set_ylabel('$e_2$ [m]')
 axs[0, 1].grid(True, linestyle=':', alpha=0.7)
 
-# --- 左下: 回転誤差 e_3 - time ---
+# --- 左中: 回転誤差 e_3 - time ---
 axs[1, 0].plot(df['time'], df['e_3'], color='green', linewidth=2)
 axs[1, 0].set_title('Orientation Error $e_3$ over Time')
 axs[1, 0].set_xlabel('Time [s]')
 axs[1, 0].set_ylabel('$e_3$ [rad]')
 axs[1, 0].grid(True, linestyle=':', alpha=0.7)
 
-# --- 右下: IOC/RLS control signals - time ---
+# --- 右中: IOC/RLS control signals - time ---
 axs[1, 1].plot(
     df['time'], df['phi_ioc'], color='purple', linewidth=2, label=r'$\phi_{ioc}$')
 axs[1, 1].plot(
@@ -106,6 +107,38 @@ axs[1, 1].set_xlabel('Time [s]')
 axs[1, 1].set_ylabel('Control input')
 axs[1, 1].grid(True, linestyle=':', alpha=0.7)
 axs[1, 1].legend()
+
+# --- 左下: human angle and inverted target roll - time ---
+if {'phi_hum', 'target_roll'}.issubset(df.columns):
+    axs[2, 0].plot(df['time'], df['phi_hum'], label=r'$\phi_{hum}$')
+    axs[2, 0].plot(
+        df['time'], -df['target_roll'], linestyle='--', label='-target_roll')
+    axs[2, 0].set_title('Human angle and inverted target roll')
+    axs[2, 0].set_xlabel('Time [s]')
+    axs[2, 0].set_ylabel('Value')
+    axs[2, 0].grid(True, linestyle=':', alpha=0.7)
+    axs[2, 0].legend()
+else:
+    axs[2, 0].text(
+        0.5, 0.5, 'Required columns are not available in this CSV',
+        ha='center', va='center')
+    axs[2, 0].set_axis_off()
+
+# --- 右下: RLS parameter changes - time ---
+theta_columns = [column for column in df.columns if column.startswith('rls_theta_')]
+if theta_columns:
+    for column in theta_columns:
+        axs[2, 1].plot(df['time'], df[column], label=column)
+    axs[2, 1].set_title('RLS parameter changes')
+    axs[2, 1].set_xlabel('Time [s]')
+    axs[2, 1].set_ylabel(r'$\hat{\theta}$')
+    axs[2, 1].grid(True, linestyle=':', alpha=0.7)
+    axs[2, 1].legend()
+else:
+    axs[2, 1].text(
+        0.5, 0.5, 'RLS parameter columns are not available in this CSV',
+        ha='center', va='center')
+    axs[2, 1].set_axis_off()
 
 # 全体レイアウト調整後に上下の間隔(hspace)を広げる
 plt.tight_layout()
