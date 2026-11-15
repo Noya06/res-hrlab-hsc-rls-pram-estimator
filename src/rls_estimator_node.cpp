@@ -1,4 +1,5 @@
 #include <algorithm>
+#include <cmath>
 #include <fstream>
 #include <functional>
 #include <memory>
@@ -10,7 +11,97 @@
 #include <rclcpp/rclcpp.hpp>
 #include <std_msgs/msg/float64_multi_array.hpp>
 
-#include "rls_estimator.hpp"
+class RLSEstimator
+{
+public:
+  RLSEstimator(
+    std::size_t parameter_count,
+    double initial_covariance,
+    const std::vector<double> & initial_parameters,
+    double forgetting_factor)
+  : theta_(parameter_count, 0.0),
+    covariance_(parameter_count, std::vector<double>(parameter_count, 0.0)),
+    forgetting_factor_(forgetting_factor)
+  {
+    if (parameter_count == 0 || !std::isfinite(initial_covariance) || initial_covariance <= 0.0) {
+      throw std::invalid_argument("RLS requires a positive parameter count and covariance");
+    }
+    if (!std::isfinite(forgetting_factor_) || forgetting_factor_ <= 0.0 ||
+      forgetting_factor_ > 1.0)
+    {
+      throw std::invalid_argument("RLS forgetting_factor must be in (0, 1]");
+    }
+    if (!initial_parameters.empty() && initial_parameters.size() != parameter_count) {
+      throw std::invalid_argument("Initial parameter dimension does not match RLS dimension");
+    }
+    if (!initial_parameters.empty()) {
+      theta_ = initial_parameters;
+    }
+    for (std::size_t i = 0; i < parameter_count; ++i) {
+      covariance_[i][i] = initial_covariance;
+    }
+  }
+
+  std::vector<double> update(
+    double phi_ref_val,
+    double phi_src_val,
+    const std::vector<double> & feature_vector)
+  {
+    const std::size_t n = theta_.size();
+    if (feature_vector.size() != n) {
+      throw std::invalid_argument("Feature vector dimension does not match RLS dimension");
+    }
+    const double y = phi_ref_val - phi_src_val;
+
+    std::vector<double> p_phi(n, 0.0);
+    double denominator = forgetting_factor_;
+    for (std::size_t i = 0; i < n; ++i) {
+      for (std::size_t j = 0; j < n; ++j) {
+        p_phi[i] += covariance_[i][j] * feature_vector[j];
+      }
+      denominator += feature_vector[i] * p_phi[i];
+    }
+    if (!std::isfinite(denominator) || denominator <= 1.0e-12) {
+      throw std::runtime_error("RLS covariance denominator is not positive and finite");
+    }
+
+    std::vector<double> gain(n, 0.0);
+    double prediction = 0.0;
+    for (std::size_t i = 0; i < n; ++i) {
+      gain[i] = p_phi[i] / denominator;
+      prediction += feature_vector[i] * theta_[i];
+    }
+    const double innovation = y - prediction;
+    for (std::size_t i = 0; i < n; ++i) {
+      theta_[i] += gain[i] * innovation;
+    }
+
+    std::vector<std::vector<double>> updated = covariance_;
+    for (std::size_t i = 0; i < n; ++i) {
+      for (std::size_t j = 0; j < n; ++j) {
+        updated[i][j] =
+          (updated[i][j] - gain[i] * p_phi[j]) / forgetting_factor_;
+      }
+    }
+    covariance_ = updated;
+    for (std::size_t i = 0; i < n; ++i) {
+      for (std::size_t j = i + 1; j < n; ++j) {
+        const double symmetric = 0.5 * (covariance_[i][j] + covariance_[j][i]);
+        covariance_[i][j] = symmetric;
+        covariance_[j][i] = symmetric;
+      }
+      if (!std::isfinite(covariance_[i][i]) || covariance_[i][i] < 0.0) {
+        covariance_[i][i] = 0.0;
+      }
+    }
+    return theta_;
+  }
+
+private:
+  std::vector<double> theta_;
+  std::vector<std::vector<double>> covariance_;
+  double forgetting_factor_;
+};
 
 class RlsEstimatorNode final : public rclcpp::Node
 {
@@ -20,6 +111,7 @@ public:
   {
     declare_parameter<int>("parameter_count", 2);
     declare_parameter<double>("initial_covariance", 1.0e3);
+    declare_parameter<double>("forgetting_factor", 0.99); //1.0に近いほど過去のデータを重視する.0.99なら直近100サンプル
     declare_parameter<std::vector<double>>("initial_parameters", std::vector<double>{});
     declare_parameter<std::vector<int64_t>>("feature_indices", {4, 5});
     declare_parameter<int>("phi_ref_index", 11);
@@ -30,10 +122,12 @@ public:
 
     int parameter_count;
     double initial_covariance;
+    double forgetting_factor;
     std::vector<double> initial_parameters;
     std::vector<int64_t> feature_indices;
     get_parameter("parameter_count", parameter_count);
     get_parameter("initial_covariance", initial_covariance);
+    get_parameter("forgetting_factor", forgetting_factor);
     get_parameter("initial_parameters", initial_parameters);
     get_parameter("feature_indices", feature_indices);
     get_parameter("phi_ref_index", phi_ref_index_);
@@ -54,7 +148,8 @@ public:
     }
 
     estimator_ = std::make_unique<RLSEstimator>(
-      static_cast<std::size_t>(parameter_count), initial_covariance, initial_parameters);
+      static_cast<std::size_t>(parameter_count), initial_covariance, initial_parameters,
+      forgetting_factor);
     feature_indices_ = std::move(indices);
     theta_pub_ = create_publisher<std_msgs::msg::Float64MultiArray>("rls/theta", 10);
     sample_sub_ = create_subscription<std_msgs::msg::Float64MultiArray>(
@@ -64,7 +159,9 @@ public:
     if (process_csv_on_start_ && !csv_path_.empty()) {
       process_csv();
     }
-    RCLCPP_INFO(this->get_logger(), "RLS推定ノードを起動しました (次元=%d)", parameter_count);
+    RCLCPP_INFO(
+      this->get_logger(), "RLS推定ノードを起動しました (次元=%d, 忘却係数=%.6f)",
+      parameter_count, forgetting_factor);
   }
 
 private:

@@ -15,8 +15,8 @@ def generate_launch_description():
     steps_arg = DeclareLaunchArgument(
         'steps', default_value='10000', description='総シミュレーションステップ数'
     )
-    k2_arg = DeclareLaunchArgument('k_2', default_value='10.0', description='IOC制御ゲイン k2')
-    k3_arg = DeclareLaunchArgument('k_3', default_value='0.5', description='IOC制御ゲイン k3')
+    k2_arg = DeclareLaunchArgument('k_2', default_value='2.0', description='IOC制御ゲイン k2')
+    k3_arg = DeclareLaunchArgument('k_3', default_value='0.1', description='IOC制御ゲイン k3')
     ioc_alpha_arg = DeclareLaunchArgument(
         'ioc_alpha',
         default_value='0.05',
@@ -36,6 +36,11 @@ def generate_launch_description():
         'rls_gain',
         default_value='1.5',
         description='RLS統合時のRLS補正出力ゲイン',
+    )
+    forgetting_factor_arg = DeclareLaunchArgument(
+        'forgetting_factor',
+        default_value='1.0',
+        description='RLS忘却係数 (0 < forgetting_factor <= 1)',
     )
     forward_speed_arg = DeclareLaunchArgument(
         'forward_speed',
@@ -177,6 +182,7 @@ def generate_launch_description():
             'feature_indices': [4, 5],
             'phi_ref_index': 11,
             'phi_src_index': 10,
+            'forgetting_factor': LaunchConfiguration('forgetting_factor'),
             'csv_path': LaunchConfiguration('rls_csv_path'),
             'process_csv_on_start': LaunchConfiguration('rls_process_csv'),
         }],
@@ -216,6 +222,7 @@ def generate_launch_description():
         k_w_arg,
         ioc_gain_arg,
         rls_gain_arg,
+        forgetting_factor_arg,
         forward_speed_arg,
         path_tracking_arg,
         use_moza_arg,

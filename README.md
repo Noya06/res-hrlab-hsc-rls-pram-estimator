@@ -208,6 +208,13 @@ ros2 run res-hr-simulate-hsc-ros2-unity rls_estimator_node --ros-args \
 
 `RLSEstimator`は初期共分散`initial_covariance`（既定値`1e3`）と
 `initial_parameters`を受け取り、各サンプルでゲイン、パラメータ、共分散を更新します。
+RLS実装は`rls_estimator_node.cpp`内にあり、`forgetting_factor`（既定値`1.0`）で
+過去データの重みを調整できます。値は`0 < forgetting_factor <= 1`で、
+`1.0`は忘却なしです。例えば値が変化する環境では次のように指定します。
+
+```bash
+ros2 launch res-hr-simulate-hsc-ros2-unity launch.py forgetting_factor:=0.995
+```
 更新後の共分散は数値誤差による非対称化を防ぐため対称化されます。
 
 ### rlshsc_integrator_node

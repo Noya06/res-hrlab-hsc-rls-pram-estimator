@@ -82,10 +82,7 @@ install(DIRECTORY scripts
   OPTIONAL
 )
 
-install(DIRECTORY include
-  DESTINATION include
-  OPTIONAL
-)
+
 
 # Pythonスクリプトのインストール設定
 install(PROGRAMS
