@@ -175,7 +175,9 @@ FFB出力には一次ローパスを適用し、急な反力変化を抑えて�
 
 ### csv_logger_node
 
-`/joystick/calc_results`と`/real_robot_hum/state`を受信し、CSVへ保存します。
+`/rlshsc/calc_results`と`/real_robot_hum/state`を受信し、CSVへ保存します。
+CSVにはIOC出力`phi_ioc`、RLS補正値`rls_prediction`、および加算後の
+`target_roll`が記録されます。
 
 ### rls_estimator_node
 
@@ -218,7 +220,7 @@ ros2 launch res-hr-simulate-hsc-ros2-unity launch.py
 記録列:
 
 ```text
-time,e_2,e_3,v_r,v_xi,phi_com_y,phi_hum_y,y_difference,position_x,position_z,yaw
+time,e_2,e_3,v_r,v_xi,phi_ioc,rls_prediction,target_roll,position_x,position_z,yaw
 ```
 
 `/real_robot_hum/state`の位置・姿勢データ:

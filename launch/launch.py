@@ -15,11 +15,11 @@ def generate_launch_description():
     steps_arg = DeclareLaunchArgument(
         'steps', default_value='10000', description='総シミュレーションステップ数'
     )
-    k2_arg = DeclareLaunchArgument('k_2', default_value='20.0', description='IOC制御ゲイン k2')
-    k3_arg = DeclareLaunchArgument('k_3', default_value='1.0', description='IOC制御ゲイン k3')
+    k2_arg = DeclareLaunchArgument('k_2', default_value='10.0', description='IOC制御ゲイン k2')
+    k3_arg = DeclareLaunchArgument('k_3', default_value='0.5', description='IOC制御ゲイン k3')
     ioc_alpha_arg = DeclareLaunchArgument(
         'ioc_alpha',
-        default_value='0.5',
+        default_value='0.05',
         description='IOCの速度方向補正係数 alpha',
     )
     k_w_arg = DeclareLaunchArgument(
@@ -146,7 +146,7 @@ def generate_launch_description():
         name='moza_ffb_node',
         parameters=[{
             # FFBの比例・微分ゲインと安全側の出力制限
-            'p_gain': 30000.0,
+            'p_gain': 20000.0,
             'd_gain': 0.0,
             'force_filter_alpha': 1.0, # 1.0でフィルタなし
             'max_force_level': 30000, # 最大出力レベル(0-32767)

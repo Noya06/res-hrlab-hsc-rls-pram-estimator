@@ -27,7 +27,7 @@ public:
 
     // 計算結果トピックの購読
     calc_result_sub_ = this->create_subscription<std_msgs::msg::Float64MultiArray>(
-      "/joystick/calc_results", 10,
+      "/rlshsc/calc_results", 10,
       std::bind(&CsvLoggerNode::calc_results_callback, this, std::placeholders::_1));
 
     state_sub_ = this->create_subscription<std_msgs::msg::Float64MultiArray>(
@@ -91,7 +91,7 @@ private:
       return;
     }
 
-    if (msg->data.size() < 7) return;
+    if (msg->data.size() < 8) return;
 
     CsvRow row;
     row.time      = msg->data[0];
@@ -99,9 +99,9 @@ private:
     row.e_3       = msg->data[2];
     row.v_r       = msg->data[3];
     row.v_xi      = msg->data[4];
-    row.phi_com_y = msg->data[5];
-    row.phi_hum_y = msg->data[6];
-    row.y_difference = row.phi_hum_y - row.phi_com_y;
+    row.phi_ioc   = msg->data[5];
+    row.rls_prediction = msg->data[6];
+    row.target_roll = msg->data[7];
     row.position_x = position_x_;
     row.position_z = position_z_;
     row.yaw = yaw_;
@@ -184,13 +184,13 @@ private:
     file << "# steps: " << max_steps_ << "\n";
     file << "# output_dir: " << output_dir_ << "\n";
     file << "# -----------------------------\n";
-    file << "time,e_2,e_3,v_r,v_xi,phi_com_y,phi_hum_y,y_difference,"
+    file << "time,e_2,e_3,v_r,v_xi,phi_ioc,rls_prediction,target_roll,"
             "position_x,position_z,yaw\n";
 
     for (const auto& r : records_) {
       file << r.time << "," << r.e_2 << "," << r.e_3 << "," << r.v_r << "," << r.v_xi
-           << "," << r.phi_com_y << "," << r.phi_hum_y
-           << "," << r.y_difference << "," << r.position_x << "," << r.position_z
+           << "," << r.phi_ioc << "," << r.rls_prediction << "," << r.target_roll
+           << "," << r.position_x << "," << r.position_z
            << "," << r.yaw << "\n";
     }
     
@@ -234,7 +234,7 @@ private:
   }
 
   struct CsvRow {
-    double time, e_2, e_3, v_r, v_xi, phi_com_y, phi_hum_y, y_difference;
+    double time, e_2, e_3, v_r, v_xi, phi_ioc, rls_prediction, target_roll;
     double position_x, position_z, yaw;
   };
 

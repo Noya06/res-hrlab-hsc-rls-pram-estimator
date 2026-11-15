@@ -52,6 +52,7 @@ public:
     target_roll_pub_ = create_publisher<std_msgs::msg::Float64>("/joystick/target_roll", 10);
     twist_pub_ = create_publisher<geometry_msgs::msg::Twist>("/real_robot/twist", 10);
     phi_pub_ = create_publisher<std_msgs::msg::Float64>("/rlshsc/phi_com_y", 10);
+    log_pub_ = create_publisher<std_msgs::msg::Float64MultiArray>("/rlshsc/calc_results", 100);
     RCLCPP_INFO(get_logger(), "RLS-HSC統合ノードを起動しました (IOC + RLS加算)");
   }
 
@@ -98,14 +99,25 @@ private:
     }
     const double phi_ioc = msg->data[phi_ioc_index_];
     // FFBへ送る指令はIOC出力とRLS補正値の加算値とする。
-    //const double target_roll = std::clamp(
-    //  phi_ioc + rls_prediction, -max_target_roll_, max_target_roll_);
-    const double target_roll =   phi_ioc;// + rls_prediction;
+    const double target_roll = std::clamp(phi_ioc + rls_prediction, -max_target_roll_, max_target_roll_);
 
     std_msgs::msg::Float64 phi_msg;
     phi_msg.data = target_roll;
     phi_pub_->publish(phi_msg);
     target_roll_pub_->publish(phi_msg);
+
+    std_msgs::msg::Float64MultiArray log_msg;
+    log_msg.data = {
+      msg->data[0],  // time
+      msg->data[4],  // e_2
+      msg->data[5],  // e_3
+      msg->data[6],  // v_r
+      msg->data[7],  // v_xi
+      phi_ioc,
+      rls_prediction,
+      target_roll,
+    };
+    log_pub_->publish(log_msg);
 
     geometry_msgs::msg::Twist twist;
     if (msg->data.size() > 8) {
@@ -136,6 +148,7 @@ private:
   rclcpp::Subscription<std_msgs::msg::Float64MultiArray>::SharedPtr calc_sub_;
   rclcpp::Publisher<std_msgs::msg::Float64>::SharedPtr target_roll_pub_;
   rclcpp::Publisher<std_msgs::msg::Float64>::SharedPtr phi_pub_;
+  rclcpp::Publisher<std_msgs::msg::Float64MultiArray>::SharedPtr log_pub_;
   rclcpp::Publisher<geometry_msgs::msg::Twist>::SharedPtr twist_pub_;
 };
 
