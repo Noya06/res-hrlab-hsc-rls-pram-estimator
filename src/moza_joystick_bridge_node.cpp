@@ -1,15 +1,16 @@
-#include <chrono>
+#include <algorithm>
 #include <cerrno>
+#include <chrono>
 #include <cstring>
 #include <fcntl.h>
 #include <linux/input.h>
-#include <unistd.h>
 #include <memory>
 #include <string>
+#include <unistd.h>
 #include <vector>
-#include <algorithm>
 
 #include <rclcpp/rclcpp.hpp>
+#include <std_msgs/msg/bool.hpp>
 #include <std_msgs/msg/float64.hpp>
 #include <std_msgs/msg/float64_multi_array.hpp>
 
@@ -23,6 +24,7 @@ public:
     this->declare_parameter<std::string>("device", "/dev/input/event4");
     this->declare_parameter<int>("axis_x_code", ABS_Y);
     this->declare_parameter<int>("axis_y_code", ABS_X);
+    this->declare_parameter<int>("trigger_button_code", BTN_TRIGGER);
     this->declare_parameter<double>("axis_center", 32767.5);
     this->declare_parameter<double>("axis_scale", 32767.5);
     this->declare_parameter<double>("deadzone", 0.02);
@@ -32,12 +34,21 @@ public:
     this->get_parameter("device", device_);
     this->get_parameter("axis_x_code", axis_x_code_);
     this->get_parameter("axis_y_code", axis_y_code_);
+    this->get_parameter("trigger_button_code", trigger_button_code_);
     this->get_parameter("axis_center", axis_center_);
     this->get_parameter("axis_scale", axis_scale_);
     this->get_parameter("deadzone", deadzone_);
     this->get_parameter("override_constant_forward_speed", override_constant_forward_speed_);
 
-    arduino_state_pub_ = this->create_publisher<std_msgs::msg::Float64MultiArray>("/joystick/joystick_state", 10);
+    arduino_state_pub_ = this->create_publisher<std_msgs::msg::Float64MultiArray>(
+      "/joystick/joystick_state", 10);
+    trigger_pub_ = this->create_publisher<std_msgs::msg::Bool>(
+      "/rls/update_enabled", rclcpp::QoS(1).transient_local());
+
+    // 起動時の初期状態（未押下 = false）を配信
+    std_msgs::msg::Bool init_trigger_msg;
+    init_trigger_msg.data = trigger_pressed_;
+    trigger_pub_->publish(init_trigger_msg);
 
     open_device();
 
@@ -47,8 +58,8 @@ public:
       std::bind(&MozaJoystickBridgeNode::poll_input, this));
 
     RCLCPP_INFO(this->get_logger(),
-                "MOZA input started. device=%s x_code=%d y_code=%d constant_forward=%s",
-                device_.c_str(), axis_x_code_, axis_y_code_,
+                "MOZA input started. device=%s x_code=%d y_code=%d trigger_code=%d constant_forward=%s",
+                device_.c_str(), axis_x_code_, axis_y_code_, trigger_button_code_,
                 override_constant_forward_speed_ ? "true" : "false");
   }
 
@@ -75,6 +86,7 @@ private:
 
     input_event ev;
     bool updated = false;
+    bool trigger_changed = false;
 
     while (true) {
       const ssize_t bytes = ::read(input_fd_, &ev, sizeof(ev));
@@ -98,7 +110,20 @@ private:
           raw_y_ = static_cast<double>(ev.value);
           updated = true;
         }
+      } else if (ev.type == EV_KEY && ev.code == trigger_button_code_) {
+        const bool pressed = (ev.value != 0);
+        if (pressed != trigger_pressed_) {
+          trigger_pressed_ = pressed;
+          trigger_changed = true;
+        }
       }
+    }
+
+    // 軸が動いていなくてもトリガー状態が変わったら即座に配信する
+    if (trigger_changed) {
+      std_msgs::msg::Bool trigger_msg;
+      trigger_msg.data = trigger_pressed_;
+      trigger_pub_->publish(trigger_msg);
     }
 
     if (!updated) {
@@ -142,8 +167,8 @@ private:
   int input_fd_ = -1;
   int axis_x_code_ = ABS_X;
   int axis_y_code_ = ABS_Y;
-  bool x_calibrated_ = false;
-  bool y_calibrated_ = false;
+  int trigger_button_code_ = BTN_TRIGGER;
+  bool trigger_pressed_ = false;
   double raw_x_ = 0.0;
   double raw_y_ = 0.0;
   double axis_center_ = 32767.5;
@@ -156,6 +181,7 @@ private:
   std::string device_;
   rclcpp::TimerBase::SharedPtr read_timer_;
   rclcpp::Publisher<std_msgs::msg::Float64MultiArray>::SharedPtr arduino_state_pub_;
+  rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr trigger_pub_;
 };
 
 int main(int argc, char * argv[])

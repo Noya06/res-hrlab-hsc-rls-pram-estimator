@@ -44,7 +44,7 @@ def generate_launch_description():
     )
     rls_update_enabled_arg = DeclareLaunchArgument(
         'rls_update_enabled',
-        default_value='true',
+        default_value='false',
         description='RLSパラメータを更新するか。falseで初期値を固定',
     )
     forward_speed_arg = DeclareLaunchArgument(

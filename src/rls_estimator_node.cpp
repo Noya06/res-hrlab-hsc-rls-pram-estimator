@@ -1,18 +1,15 @@
 #include <algorithm>
-#include <chrono>
 #include <cmath>
-#include <fcntl.h>
 #include <fstream>
 #include <functional>
 #include <memory>
 #include <sstream>
 #include <stdexcept>
 #include <string>
-#include <termios.h>
-#include <unistd.h>
 #include <vector>
 
 #include <rclcpp/rclcpp.hpp>
+#include <std_msgs/msg/bool.hpp>
 #include <std_msgs/msg/float64_multi_array.hpp>
 
 class RLSEstimator
@@ -118,7 +115,7 @@ public:
     declare_parameter<int>("parameter_count", 2);
     declare_parameter<double>("initial_covariance", 1.0e3);
     declare_parameter<double>("forgetting_factor", 0.99);
-    declare_parameter<bool>("update_enabled", true);
+    declare_parameter<bool>("update_enabled", false);
     declare_parameter<std::vector<double>>("initial_parameters", std::vector<double>{});
     declare_parameter<std::vector<int64_t>>("feature_indices", {4, 5});
     declare_parameter<int>("phi_ref_index", 11);
@@ -163,10 +160,9 @@ public:
     sample_sub_ = create_subscription<std_msgs::msg::Float64MultiArray>(
       "/joystick/calc_results", 100,
       std::bind(&RlsEstimatorNode::sample_callback, this, std::placeholders::_1));
-    keyboard_timer_ = create_wall_timer(
-      std::chrono::milliseconds(50),
-      std::bind(&RlsEstimatorNode::poll_keyboard, this));
-    configure_keyboard();
+    update_enabled_sub_ = create_subscription<std_msgs::msg::Bool>(
+      "/rls/update_enabled", rclcpp::QoS(1).transient_local(),
+      std::bind(&RlsEstimatorNode::update_enabled_callback, this, std::placeholders::_1));
 
     if (process_csv_on_start_ && !csv_path_.empty()) {
       process_csv();
@@ -175,16 +171,21 @@ public:
       this->get_logger(), "RLS推定ノードを起動しました (次元=%d, 忘却係数=%.6f)",
       parameter_count, forgetting_factor);
     RCLCPP_INFO(
-      this->get_logger(), "RLSパラメータ更新: %s。スペースキーで現在値を固定します。",
-      update_enabled_ ? "有効" : "無効（固定）");
-  }
-
-  ~RlsEstimatorNode() override
-  {
-    restore_keyboard();
+      this->get_logger(), "RLSパラメータ更新: 待機中（トリガーを引いている間のみ更新します）");
   }
 
 private:
+  void update_enabled_callback(const std_msgs::msg::Bool::SharedPtr msg)
+  {
+    if (update_enabled_ == msg->data) {
+      return;
+    }
+    update_enabled_ = msg->data;
+    RCLCPP_INFO(
+      get_logger(), "トリガー入力によりRLSパラメータ更新を%sにしました。",
+      update_enabled_ ? "有効（更新中）" : "無効（固定）");
+  }
+
   void sample_callback(const std_msgs::msg::Float64MultiArray::SharedPtr msg)
   {
     if (phi_ref_index_ < 0 || phi_src_index_ < 0 ||
@@ -214,59 +215,6 @@ private:
       theta_pub_->publish(msg);
     } catch (const std::exception & error) {
       RCLCPP_ERROR_THROTTLE(get_logger(), *get_clock(), 5000, "RLS更新をスキップ: %s", error.what());
-    }
-  }
-
-  void configure_keyboard()
-  {
-    if (!isatty(STDIN_FILENO) || tcgetattr(STDIN_FILENO, &original_terminal_) != 0) {
-      return;
-    }
-
-    terminal_flags_ = fcntl(STDIN_FILENO, F_GETFL, 0);
-    if (terminal_flags_ < 0) {
-      return;
-    }
-
-    termios raw_terminal = original_terminal_;
-    raw_terminal.c_lflag &= static_cast<tcflag_t>(~(ICANON | ECHO));
-    raw_terminal.c_cc[VMIN] = 0;
-    raw_terminal.c_cc[VTIME] = 0;
-    if (tcsetattr(STDIN_FILENO, TCSANOW, &raw_terminal) != 0) {
-      return;
-    }
-    terminal_configured_ = true;
-    if (fcntl(STDIN_FILENO, F_SETFL, terminal_flags_ | O_NONBLOCK) != 0) {
-      restore_keyboard();
-      return;
-    }
-    RCLCPP_INFO(get_logger(), "スペースキー監視を有効化しました");
-  }
-
-  void restore_keyboard()
-  {
-    if (!terminal_configured_) {
-      return;
-    }
-    tcsetattr(STDIN_FILENO, TCSANOW, &original_terminal_);
-    fcntl(STDIN_FILENO, F_SETFL, terminal_flags_);
-    terminal_configured_ = false;
-  }
-
-  void poll_keyboard()
-  {
-    if (!terminal_configured_ || !update_enabled_) {
-      return;
-    }
-
-    char key;
-    while (read(STDIN_FILENO, &key, sizeof(key)) > 0) {
-      if (key == ' ') {
-        update_enabled_ = false;
-        RCLCPP_WARN(
-          get_logger(), "スペースキーを検出しました。RLSパラメータを現在値で固定します。");
-        return;
-      }
     }
   }
 
@@ -355,16 +303,13 @@ private:
   std::vector<std::size_t> feature_indices_;
   rclcpp::Publisher<std_msgs::msg::Float64MultiArray>::SharedPtr theta_pub_;
   rclcpp::Subscription<std_msgs::msg::Float64MultiArray>::SharedPtr sample_sub_;
+  rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr update_enabled_sub_;
   int phi_ref_index_{11};
   int phi_src_index_{10};
   std::string csv_path_;
   std::string csv_output_path_;
   bool process_csv_on_start_{false};
-  bool update_enabled_{true};
-  bool terminal_configured_{false};
-  int terminal_flags_{0};
-  termios original_terminal_{};
-  rclcpp::TimerBase::SharedPtr keyboard_timer_;
+  bool update_enabled_{false};
 };
 
 int main(int argc, char ** argv)
