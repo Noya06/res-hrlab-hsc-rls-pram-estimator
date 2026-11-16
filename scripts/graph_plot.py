@@ -9,7 +9,7 @@ import matplotlib.pyplot as plt
 # ---------------------------------------------------------
 workspace_dir = Path(__file__).resolve().parents[3]
 # プロット対象のCSV指定
-filename = workspace_dir / 'data' / '2条追加result_20261116_175106_steps10000.csv'
+filename = workspace_dir / 'data' / 'result_20261116_184338_steps10000.csv'
 df = pd.read_csv(filename, comment='#')
 
 # 時間刻み dt の計算

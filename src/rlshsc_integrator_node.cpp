@@ -18,6 +18,7 @@ public:
   {
     declare_parameter<int>("phi_ioc_index", 10);
     declare_parameter<std::vector<int64_t>>("feature_indices", {4, 5, 12, 13, 14, 15, 16});
+    declare_parameter<std::vector<double>>("feature_scales", std::vector<double>{});
     declare_parameter<double>("joystick_center", 512.0);
     declare_parameter<double>("joystick_max_deviation", 512.0);
     declare_parameter<double>("max_roll_rad", 1.0);
@@ -27,8 +28,10 @@ public:
     declare_parameter<bool>("invert_steering", false);
 
     std::vector<int64_t> feature_indices;
+    std::vector<double> feature_scales;
     get_parameter("phi_ioc_index", phi_ioc_index_);
     get_parameter("feature_indices", feature_indices);
+    get_parameter("feature_scales", feature_scales);
     get_parameter("joystick_center", joystick_center_);
     get_parameter("joystick_max_deviation", joystick_max_deviation_);
     get_parameter("max_roll_rad", max_roll_rad_);
@@ -49,6 +52,21 @@ public:
         throw std::invalid_argument("feature_indices must be non-negative");
       }
       feature_indices_.push_back(static_cast<std::size_t>(idx));
+    }
+
+    // 特徴量の正規化スケール設定
+    if (feature_scales.empty()) {
+      feature_scales_.assign(feature_indices_.size(), 1.0);
+    } else if (feature_scales.size() != feature_indices_.size()) {
+      throw std::invalid_argument(
+        "feature_scales size must match feature_indices size");
+    } else {
+      feature_scales_ = feature_scales;
+    }
+    for (std::size_t i = 0; i < feature_scales_.size(); ++i) {
+      if (!std::isfinite(feature_scales_[i]) || std::abs(feature_scales_[i]) < 1e-12) {
+        throw std::invalid_argument("feature_scales values must be finite and non-zero");
+      }
     }
 
     theta_sub_ = create_subscription<std_msgs::msg::Float64MultiArray>(
@@ -111,7 +129,7 @@ private:
 
     double rls_prediction = 0.0;
     for (std::size_t i = 0; i < feature_indices_.size(); ++i) {
-      rls_prediction += msg->data[feature_indices_[i]] * theta_[i];
+      rls_prediction += (msg->data[feature_indices_[i]] / feature_scales_[i]) * theta_[i];
     }
     const double phi_ioc = msg->data[phi_ioc_index_];
     // FFBへ送る指令はIOC出力とRLS補正値の加算値とする。
@@ -171,6 +189,7 @@ private:
 
   int phi_ioc_index_{10};
   std::vector<std::size_t> feature_indices_;
+  std::vector<double> feature_scales_;
   double joystick_center_{512.0};
   double joystick_max_deviation_{512.0};
   double max_roll_rad_{1.0};

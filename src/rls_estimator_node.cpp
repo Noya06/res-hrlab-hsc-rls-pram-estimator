@@ -118,6 +118,7 @@ public:
     declare_parameter<bool>("update_enabled", false);
     declare_parameter<std::vector<double>>("initial_parameters", std::vector<double>{});
     declare_parameter<std::vector<int64_t>>("feature_indices", {4, 5, 12, 13, 14, 15, 16});
+    declare_parameter<std::vector<double>>("feature_scales", std::vector<double>{});
     declare_parameter<int>("phi_ref_index", 11);
     declare_parameter<int>("phi_src_index", 10);
     declare_parameter<std::string>("csv_path", "");
@@ -130,11 +131,13 @@ public:
     get_parameter("update_enabled", update_enabled_);
     std::vector<double> initial_parameters;
     std::vector<int64_t> feature_indices;
+    std::vector<double> feature_scales;
     get_parameter("parameter_count", parameter_count);
     get_parameter("initial_covariance", initial_covariance);
     get_parameter("forgetting_factor", forgetting_factor);
     get_parameter("initial_parameters", initial_parameters);
     get_parameter("feature_indices", feature_indices);
+    get_parameter("feature_scales", feature_scales);
     get_parameter("phi_ref_index", phi_ref_index_);
     get_parameter("phi_src_index", phi_src_index_);
     get_parameter("csv_path", csv_path_);
@@ -150,6 +153,21 @@ public:
         throw std::invalid_argument("feature_indices must be non-negative");
       }
       indices.push_back(static_cast<std::size_t>(index));
+    }
+
+    // 特徴量の正規化スケール設定
+    if (feature_scales.empty()) {
+      feature_scales_.assign(indices.size(), 1.0);
+    } else if (feature_scales.size() != indices.size()) {
+      throw std::invalid_argument(
+        "feature_scales size must match feature_indices size");
+    } else {
+      feature_scales_ = feature_scales;
+    }
+    for (std::size_t i = 0; i < feature_scales_.size(); ++i) {
+      if (!std::isfinite(feature_scales_[i]) || std::abs(feature_scales_[i]) < 1e-12) {
+        throw std::invalid_argument("feature_scales values must be finite and non-zero");
+      }
     }
 
     estimator_ = std::make_unique<RLSEstimator>(
@@ -170,6 +188,16 @@ public:
     RCLCPP_INFO(
       this->get_logger(), "RLS推定ノードを起動しました (次元=%d, 忘却係数=%.6f)",
       parameter_count, forgetting_factor);
+    {
+      std::ostringstream oss;
+      oss << "特徴量スケール: [";
+      for (std::size_t i = 0; i < feature_scales_.size(); ++i) {
+        if (i > 0) oss << ", ";
+        oss << feature_scales_[i];
+      }
+      oss << "]";
+      RCLCPP_INFO(this->get_logger(), "%s", oss.str().c_str());
+    }
     RCLCPP_INFO(
       this->get_logger(), "RLSパラメータ更新: 待機中（トリガーを引いている間のみ更新します）");
   }
@@ -200,6 +228,10 @@ private:
         return;
       }
       features.push_back(msg->data[index]);
+    }
+    // 特徴量の正規化
+    for (std::size_t i = 0; i < features.size(); ++i) {
+      features[i] /= feature_scales_[i];
     }
     update_and_publish(msg->data[phi_ref_index_], msg->data[phi_src_index_], features);
   }
@@ -283,6 +315,10 @@ private:
         }
       }
       if (!valid) continue;
+      // CSV特徴量の正規化
+      for (std::size_t i = 0; i < features.size(); ++i) {
+        features[i] /= feature_scales_[i];
+      }
       try {
         const auto theta = estimator_->update(
           std::stod(row[ref_index]), std::stod(row[src_index]), features);
@@ -301,6 +337,7 @@ private:
 
   std::unique_ptr<RLSEstimator> estimator_;
   std::vector<std::size_t> feature_indices_;
+  std::vector<double> feature_scales_;
   rclcpp::Publisher<std_msgs::msg::Float64MultiArray>::SharedPtr theta_pub_;
   rclcpp::Subscription<std_msgs::msg::Float64MultiArray>::SharedPtr sample_sub_;
   rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr update_enabled_sub_;

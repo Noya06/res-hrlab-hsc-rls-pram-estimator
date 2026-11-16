@@ -187,6 +187,9 @@ def generate_launch_description():
             # calc_resultsの列: e_2=4, e_3=5, phi_ioc=10, phi_hum=11, e_2|e_2|=12, e_3|e_3|=13, e_2|e_3|=14, |e_2|e_3=15, 1.0=16
             'parameter_count': 7,
             'feature_indices': [4, 5, 12, 13, 14, 15, 16],
+            # 各特徴量の正規化スケール（特徴量を各スケールで割って正規化）
+            # 順序: e_2, e_3, e_2|e_2|, e_3|e_3|, e_2|e_3|, |e_2|e_3, 1.0
+            'feature_scales': [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0],
             'phi_ref_index': 11,
             'phi_src_index': 10,
             'forgetting_factor': LaunchConfiguration('forgetting_factor'),
@@ -208,6 +211,8 @@ def generate_launch_description():
             # IOC/RLS入力の列番号とUnityへのphi_hum出力設定
             'phi_ioc_index': 10,
             'feature_indices': [4, 5, 12, 13, 14, 15, 16],
+            # RLS推定ノードと同一の正規化スケールを使用すること
+            'feature_scales': [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0],
             'joystick_center': 512.0,
             'joystick_max_deviation': LaunchConfiguration('max_deviation_B'),
             'max_roll_rad': LaunchConfiguration('max_roll_rad'),
