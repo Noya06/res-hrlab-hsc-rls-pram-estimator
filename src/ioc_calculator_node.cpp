@@ -307,7 +307,8 @@ private:
       e3_abs_e3,                                // 13: e_3 * |e_3|
       e2_abs_e3,                                // 14: e_2 * |e_3|
       abs_e2_e3,                                // 15: |e_2| * e_3
-      bias_term                                 // 16: 1.0
+      bias_term,                                // 16: 1.0
+      rho_                                      // 17: 経路曲率 ρ
     };
     calc_result_pub_->publish(calc_result_msg);
 

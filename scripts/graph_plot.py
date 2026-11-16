@@ -9,7 +9,7 @@ import matplotlib.pyplot as plt
 # ---------------------------------------------------------
 workspace_dir = Path(__file__).resolve().parents[3]
 # プロット対象のCSV指定
-filename = workspace_dir / 'data' / 'result_20261116_184338_steps10000.csv'
+filename = workspace_dir / 'data' / 'result_20261116_191006_steps10000.csv'
 df = pd.read_csv(filename, comment='#')
 
 # 時間刻み dt の計算
@@ -134,15 +134,35 @@ else:
     axs[2, 0].set_axis_off()
 
 # --- 3行目右: RLS parameter changes - time ---
+param_label_map = {
+    'rls_theta_0': r'$\hat{\theta}_0$ ($e_2$)',
+    'rls_theta_1': r'$\hat{\theta}_1$ ($e_3$)',
+    'rls_theta_2': r'$\hat{\theta}_2$ ($e_2|e_2|$)',
+    'rls_theta_3': r'$\hat{\theta}_3$ ($e_3|e_3|$)',
+    'rls_theta_4': r'$\hat{\theta}_4$ ($e_2|e_3|$)',
+    'rls_theta_5': r'$\hat{\theta}_5$ ($|e_2|e_3$)',
+    'rls_theta_6': r'$\hat{\theta}_6$ (bias 1.0)',
+    'rls_theta_7': r'$\hat{\theta}_7$ ($\rho$)',
+    'rls_theta_e2': r'$\hat{\theta}_{e_2}$ ($e_2$)',
+    'rls_theta_e3': r'$\hat{\theta}_{e_3}$ ($e_3$)',
+    'rls_theta_e2_abs_e2': r'$\hat{\theta}_{e_2|e_2|}$ ($e_2|e_2|$)',
+    'rls_theta_e3_abs_e3': r'$\hat{\theta}_{e_3|e_3|}$ ($e_3|e_3|$)',
+    'rls_theta_e2_abs_e3': r'$\hat{\theta}_{e_2|e_3|}$ ($e_2|e_3|$)',
+    'rls_theta_abs_e2_e3': r'$\hat{\theta}_{|e_2|e_3}$ ($|e_2|e_3$)',
+    'rls_theta_bias': r'$\hat{\theta}_{\mathrm{bias}}$ (bias 1.0)',
+    'rls_theta_rho': r'$\hat{\theta}_{\rho}$ ($\rho$)',
+}
+
 theta_columns = [column for column in df.columns if column.startswith('rls_theta_')]
 if theta_columns:
     for column in theta_columns:
-        axs[2, 1].plot(df['time'], df[column], label=column)
+        display_label = param_label_map.get(column, column)
+        axs[2, 1].plot(df['time'], df[column], label=display_label)
     axs[2, 1].set_title('RLS parameter changes')
     axs[2, 1].set_xlabel('Time [s]')
     axs[2, 1].set_ylabel(r'$\hat{\theta}$')
     axs[2, 1].grid(True, linestyle=':', alpha=0.7)
-    axs[2, 1].legend(ncol=2)
+    axs[2, 1].legend(ncol=2, fontsize=10)
 else:
     axs[2, 1].text(
         0.5, 0.5, 'RLS parameter columns are not available in this CSV',
@@ -177,6 +197,8 @@ axs[3, 1].plot(df['time'], e2_abs_e2, color='darkorange', linewidth=2, label=r'$
 axs[3, 1].plot(df['time'], e3_abs_e3, color='green', linestyle='--', linewidth=2, label=r'$e_3|e_3|$')
 axs[3, 1].plot(df['time'], e2_abs_e3, color='royalblue', linewidth=2, label=r'$e_2|e_3|$')
 axs[3, 1].plot(df['time'], abs_e2_e3, color='mediumorchid', linestyle='--', linewidth=2, label=r'$|e_2|e_3$')
+if 'rho' in df.columns:
+    axs[3, 1].plot(df['time'], df['rho'], color='black', linestyle=':', linewidth=2, label=r'$\rho$')
 axs[3, 1].axhline(0, color='gray', linestyle=':', linewidth=1)
 axs[3, 1].set_title('Nonlinear Error Terms over Time')
 axs[3, 1].set_xlabel('Time [s]')

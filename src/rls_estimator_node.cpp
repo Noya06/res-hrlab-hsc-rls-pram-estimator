@@ -112,13 +112,14 @@ public:
   RlsEstimatorNode()
   : Node("rls_estimator_node")
   {
-    declare_parameter<int>("parameter_count", 7);
+    declare_parameter<int>("parameter_count", 8);
     declare_parameter<double>("initial_covariance", 1.0e3);
     declare_parameter<double>("forgetting_factor", 0.99);
     declare_parameter<bool>("update_enabled", false);
     declare_parameter<std::vector<double>>("initial_parameters", std::vector<double>{});
-    declare_parameter<std::vector<int64_t>>("feature_indices", {4, 5, 12, 13, 14, 15, 16});
+    declare_parameter<std::vector<int64_t>>("feature_indices", {4, 5, 12, 13, 14, 15, 16, 17});
     declare_parameter<std::vector<double>>("feature_scales", std::vector<double>{});
+    declare_parameter<std::vector<std::string>>("parameter_names", std::vector<std::string>{});
     declare_parameter<int>("phi_ref_index", 11);
     declare_parameter<int>("phi_src_index", 10);
     declare_parameter<std::string>("csv_path", "");
@@ -132,12 +133,14 @@ public:
     std::vector<double> initial_parameters;
     std::vector<int64_t> feature_indices;
     std::vector<double> feature_scales;
+    std::vector<std::string> parameter_names;
     get_parameter("parameter_count", parameter_count);
     get_parameter("initial_covariance", initial_covariance);
     get_parameter("forgetting_factor", forgetting_factor);
     get_parameter("initial_parameters", initial_parameters);
     get_parameter("feature_indices", feature_indices);
     get_parameter("feature_scales", feature_scales);
+    get_parameter("parameter_names", parameter_names);
     get_parameter("phi_ref_index", phi_ref_index_);
     get_parameter("phi_src_index", phi_src_index_);
     get_parameter("csv_path", csv_path_);
@@ -168,6 +171,24 @@ public:
       if (!std::isfinite(feature_scales_[i]) || std::abs(feature_scales_[i]) < 1e-12) {
         throw std::invalid_argument("feature_scales values must be finite and non-zero");
       }
+    }
+
+    if (parameter_names.empty()) {
+      for (const auto idx : indices) {
+        if (idx == 4) parameter_names_.push_back("theta_e2");
+        else if (idx == 5) parameter_names_.push_back("theta_e3");
+        else if (idx == 12) parameter_names_.push_back("theta_e2_abs_e2");
+        else if (idx == 13) parameter_names_.push_back("theta_e3_abs_e3");
+        else if (idx == 14) parameter_names_.push_back("theta_e2_abs_e3");
+        else if (idx == 15) parameter_names_.push_back("theta_abs_e2_e3");
+        else if (idx == 16) parameter_names_.push_back("theta_bias");
+        else if (idx == 17) parameter_names_.push_back("theta_rho");
+        else parameter_names_.push_back("theta_idx_" + std::to_string(idx));
+      }
+    } else if (parameter_names.size() != indices.size()) {
+      throw std::invalid_argument("parameter_names size must match feature_indices size");
+    } else {
+      parameter_names_ = parameter_names;
     }
 
     estimator_ = std::make_unique<RLSEstimator>(
@@ -295,7 +316,7 @@ private:
         return;
       }
       output << "sample";
-      for (std::size_t i = 0; i < feature_indices_.size(); ++i) output << ",theta_" << i;
+      for (const auto & name : parameter_names_) output << "," << name;
       output << "\n";
     }
     std::size_t sample = 0;
@@ -338,6 +359,7 @@ private:
   std::unique_ptr<RLSEstimator> estimator_;
   std::vector<std::size_t> feature_indices_;
   std::vector<double> feature_scales_;
+  std::vector<std::string> parameter_names_;
   rclcpp::Publisher<std_msgs::msg::Float64MultiArray>::SharedPtr theta_pub_;
   rclcpp::Subscription<std_msgs::msg::Float64MultiArray>::SharedPtr sample_sub_;
   rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr update_enabled_sub_;
