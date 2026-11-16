@@ -100,6 +100,34 @@ def generate_launch_description():
     # -------------------------------------------------------------
     delay_cycles_L = 10
 
+    # -------------------------------------------------------------
+    # RLS特徴量の使用設定（用いる / 用いないの切り替え）
+    # enable: True (使用する) / False (使用しない)
+    # scale:  正規化スケール値（特徴量をこの値で割って正規化、通常1.0）
+    # -------------------------------------------------------------
+    feature_settings = [
+        # (特徴量名,     有効フラグ, 列index, スケール, パラメータ表示名)
+        ('e2',           True,        4,       1.0,     'rls_theta_e2'),
+        ('e3',           True,        5,       1.0,     'rls_theta_e3'),
+        ('e2_abs_e2',    True,       12,       1.0,     'rls_theta_e2_abs_e2'),
+        ('e3_abs_e3',    True,       13,       1.0,     'rls_theta_e3_abs_e3'),
+        ('e2_abs_e3',    True,       14,       1.0,     'rls_theta_e2_abs_e3'),
+        ('abs_e2_e3',    True,       15,       1.0,     'rls_theta_abs_e2_e3'),
+        ('bias',         True,       16,       1.0,     'rls_theta_bias'),
+        ('rho',          True,       17,       1.0,     'rls_theta_rho'),
+        ('e2_delay',     True,       18,       1.0,     'rls_theta_e2_delay'),
+        ('e3_delay',     True,       19,       1.0,     'rls_theta_e3_delay'),
+    ]
+
+    # 有効化された特徴量のみを自動抽出
+    active_feature_indices = [item[2] for item in feature_settings if item[1]]
+    active_feature_scales = [item[3] for item in feature_settings if item[1]]
+    active_parameter_names = [item[4] for item in feature_settings if item[1]]
+    active_parameter_count = len(active_feature_indices)
+
+    if active_parameter_count == 0:
+        raise ValueError("feature_settings 内で少なくとも1つの特徴量を True に設定してください。")
+
     # IOC計算ノード:
     # 誤差からIOC出力を計算し、/joystick/calc_resultsへ中間データを出力する。
     # 制御出力はRLS-HSC統合ノードへ一本化するため、ここでは無効にする。
@@ -138,19 +166,8 @@ def generate_launch_description():
         parameters=[{
             'steps': LaunchConfiguration('steps'),
             'output_dir': LaunchConfiguration('output_dir'),
-            'rls_parameter_count': 10,
-            'parameter_names': [
-                'rls_theta_e2',
-                'rls_theta_e3',
-                'rls_theta_e2_abs_e2',
-                'rls_theta_e3_abs_e3',
-                'rls_theta_e2_abs_e3',
-                'rls_theta_abs_e2_e3',
-                'rls_theta_bias',
-                'rls_theta_rho',
-                'rls_theta_e2_delay',
-                'rls_theta_e3_delay',
-            ],
+            'rls_parameter_count': active_parameter_count,
+            'parameter_names': active_parameter_names,
         }],
         output='screen'
     )
@@ -196,19 +213,17 @@ def generate_launch_description():
     )
 
     # RLS推定ノード:
-    # /joystick/calc_resultsから[e_2, e_3, e_2|e_2|, e_3|e_3|, e_2|e_3|, |e_2|e_3, 1.0, rho, e_2(t-L), e_3(t-L)]を特徴量として逐次推定する。
+    # /joystick/calc_resultsから選択された特徴量を逐次推定する。
     # 推定値thetaは/rls/thetaへ出力する。
     rls_estimator_node = Node(
         package='res-hr-simulate-hsc-ros2-unity',
         executable='rls_estimator_node',
         name='rls_estimator_node',
         parameters=[{
-            # calc_resultsの列: e_2=4, e_3=5, phi_ioc=10, phi_hum=11, e_2|e_2|=12, e_3|e_3|=13, e_2|e_3|=14, |e_2|e_3=15, 1.0=16, rho=17, e_2_delay=18, e_3_delay=19
-            'parameter_count': 10,
-            'feature_indices': [4, 5, 12, 13, 14, 15, 16, 17, 18, 19],
-            # 各特徴量の正規化スケール（特徴量を各スケールで割って正規化）
-            # 順序: e_2, e_3, e_2|e_2|, e_3|e_3|, e_2|e_3|, |e_2|e_3, 1.0, rho, e_2(t-L), e_3(t-L)
-            'feature_scales': [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0],
+            'parameter_count': active_parameter_count,
+            'feature_indices': active_feature_indices,
+            'feature_scales': active_feature_scales,
+            'parameter_names': active_parameter_names,
             'phi_ref_index': 11,
             'phi_src_index': 10,
             'forgetting_factor': LaunchConfiguration('forgetting_factor'),
@@ -229,9 +244,8 @@ def generate_launch_description():
         parameters=[{
             # IOC/RLS入力の列番号とUnityへのphi_hum出力設定
             'phi_ioc_index': 10,
-            'feature_indices': [4, 5, 12, 13, 14, 15, 16, 17, 18, 19],
-            # RLS推定ノードと同一の正規化スケールを使用すること
-            'feature_scales': [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0],
+            'feature_indices': active_feature_indices,
+            'feature_scales': active_feature_scales,
             'joystick_center': 512.0,
             'joystick_max_deviation': LaunchConfiguration('max_deviation_B'),
             'max_roll_rad': LaunchConfiguration('max_roll_rad'),
