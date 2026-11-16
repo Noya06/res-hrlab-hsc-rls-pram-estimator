@@ -17,8 +17,7 @@ public:
   : Node("rlshsc_integrator_node")
   {
     declare_parameter<int>("phi_ioc_index", 10);
-    declare_parameter<int>("feature_start_index", 4);
-    declare_parameter<int>("feature_count", 2);
+    declare_parameter<std::vector<int64_t>>("feature_indices", {4, 5, 12, 13});
     declare_parameter<double>("joystick_center", 512.0);
     declare_parameter<double>("joystick_max_deviation", 512.0);
     declare_parameter<double>("max_roll_rad", 1.0);
@@ -27,9 +26,9 @@ public:
     declare_parameter<double>("rls_gain", 1.0);
     declare_parameter<bool>("invert_steering", false);
 
+    std::vector<int64_t> feature_indices;
     get_parameter("phi_ioc_index", phi_ioc_index_);
-    get_parameter("feature_start_index", feature_start_index_);
-    get_parameter("feature_count", feature_count_);
+    get_parameter("feature_indices", feature_indices);
     get_parameter("joystick_center", joystick_center_);
     get_parameter("joystick_max_deviation", joystick_max_deviation_);
     get_parameter("max_roll_rad", max_roll_rad_);
@@ -41,8 +40,15 @@ public:
       throw std::invalid_argument(
         "max_target_roll must be positive and ioc_gain/rls_gain must be non-negative");
     }
-    if (feature_count_ <= 0 || feature_start_index_ < 0 || phi_ioc_index_ < 0) {
-      throw std::invalid_argument("feature indices must be non-negative and feature_count positive");
+    if (feature_indices.empty() || phi_ioc_index_ < 0) {
+      throw std::invalid_argument(
+        "feature_indices must not be empty and phi_ioc_index must be non-negative");
+    }
+    for (const auto idx : feature_indices) {
+      if (idx < 0) {
+        throw std::invalid_argument("feature_indices must be non-negative");
+      }
+      feature_indices_.push_back(static_cast<std::size_t>(idx));
     }
 
     theta_sub_ = create_subscription<std_msgs::msg::Float64MultiArray>(
@@ -77,10 +83,11 @@ public:
 private:
   void theta_callback(const std_msgs::msg::Float64MultiArray::SharedPtr msg)
   {
-    if (msg->data.size() != static_cast<std::size_t>(feature_count_)) {
+    if (msg->data.size() != feature_indices_.size()) {
       RCLCPP_WARN_THROTTLE(
         get_logger(), *get_clock(), 5000,
-        "RLS thetaの次元(%zu)が特徴量次元(%d)と一致しません", msg->data.size(), feature_count_);
+        "RLS thetaの次元(%zu)が特徴量次元(%zu)と一致しません",
+        msg->data.size(), feature_indices_.size());
       return;
     }
     theta_ = msg->data;
@@ -89,9 +96,11 @@ private:
 
   void calc_callback(const std_msgs::msg::Float64MultiArray::SharedPtr msg)
   {
-    const int required_index = std::max(
-      phi_ioc_index_, feature_start_index_ + feature_count_ - 1);
-    if (required_index < 0 || static_cast<std::size_t>(required_index) >= msg->data.size()) {
+    std::size_t required_index = static_cast<std::size_t>(phi_ioc_index_);
+    for (const auto idx : feature_indices_) {
+      required_index = std::max(required_index, idx);
+    }
+    if (required_index >= msg->data.size()) {
       RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 5000, "IOC計算結果の列数が不足しています");
       return;
     }
@@ -101,8 +110,8 @@ private:
     }
 
     double rls_prediction = 0.0;
-    for (int i = 0; i < feature_count_; ++i) {
-      rls_prediction += msg->data[feature_start_index_ + i] * theta_[i];
+    for (std::size_t i = 0; i < feature_indices_.size(); ++i) {
+      rls_prediction += msg->data[feature_indices_[i]] * theta_[i];
     }
     const double phi_ioc = msg->data[phi_ioc_index_];
     // FFBへ送る指令はIOC出力とRLS補正値の加算値とする。
@@ -114,6 +123,11 @@ private:
     phi_msg.data = target_roll;
     phi_pub_->publish(phi_msg);
     target_roll_pub_->publish(phi_msg);
+
+    const double e2_abs_e2 = (msg->data.size() > 12)
+      ? msg->data[12] : (msg->data[4] * std::abs(msg->data[4]));
+    const double e3_abs_e3 = (msg->data.size() > 13)
+      ? msg->data[13] : (msg->data[5] * std::abs(msg->data[5]));
 
     std_msgs::msg::Float64MultiArray log_msg;
     log_msg.data = {
@@ -130,6 +144,8 @@ private:
       phi_hum_,
     };
     log_msg.data.insert(log_msg.data.end(), theta_.begin(), theta_.end());
+    log_msg.data.push_back(e2_abs_e2);
+    log_msg.data.push_back(e3_abs_e3);
     log_pub_->publish(log_msg);
 
     geometry_msgs::msg::Twist twist;
@@ -145,8 +161,7 @@ private:
   }
 
   int phi_ioc_index_{10};
-  int feature_start_index_{4};
-  int feature_count_{2};
+  std::vector<std::size_t> feature_indices_;
   double joystick_center_{512.0};
   double joystick_max_deviation_{512.0};
   double max_roll_rad_{1.0};

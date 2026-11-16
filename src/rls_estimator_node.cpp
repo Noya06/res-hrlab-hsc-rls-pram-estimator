@@ -112,12 +112,12 @@ public:
   RlsEstimatorNode()
   : Node("rls_estimator_node")
   {
-    declare_parameter<int>("parameter_count", 2);
+    declare_parameter<int>("parameter_count", 4);
     declare_parameter<double>("initial_covariance", 1.0e3);
     declare_parameter<double>("forgetting_factor", 0.99);
     declare_parameter<bool>("update_enabled", false);
     declare_parameter<std::vector<double>>("initial_parameters", std::vector<double>{});
-    declare_parameter<std::vector<int64_t>>("feature_indices", {4, 5});
+    declare_parameter<std::vector<int64_t>>("feature_indices", {4, 5, 12, 13});
     declare_parameter<int>("phi_ref_index", 11);
     declare_parameter<int>("phi_src_index", 10);
     declare_parameter<std::string>("csv_path", "");

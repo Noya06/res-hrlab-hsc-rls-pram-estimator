@@ -130,7 +130,8 @@ def generate_launch_description():
         name='csv_logger_node',
         parameters=[{
             'steps': LaunchConfiguration('steps'),
-            'output_dir': LaunchConfiguration('output_dir')
+            'output_dir': LaunchConfiguration('output_dir'),
+            'rls_parameter_count': 4,
         }],
         output='screen'
     )
@@ -176,15 +177,16 @@ def generate_launch_description():
     )
 
     # RLS推定ノード:
-    # /joystick/calc_resultsから[e_2, e_3]を特徴量として逐次推定する。
+    # /joystick/calc_resultsから[e_2, e_3, e_2|e_2|, e_3|e_3|]を特徴量として逐次推定する。
     # 推定値thetaは/rls/thetaへ出力する。
     rls_estimator_node = Node(
         package='res-hr-simulate-hsc-ros2-unity',
         executable='rls_estimator_node',
         name='rls_estimator_node',
         parameters=[{
-            # calc_resultsの列: e_2=4, e_3=5, phi_hum=11, phi_ioc=10
-            'feature_indices': [4, 5],
+            # calc_resultsの列: e_2=4, e_3=5, phi_ioc=10, phi_hum=11, e_2|e_2|=12, e_3|e_3|=13
+            'parameter_count': 4,
+            'feature_indices': [4, 5, 12, 13],
             'phi_ref_index': 11,
             'phi_src_index': 10,
             'forgetting_factor': LaunchConfiguration('forgetting_factor'),
@@ -205,8 +207,7 @@ def generate_launch_description():
         parameters=[{
             # IOC/RLS入力の列番号とUnityへのphi_hum出力設定
             'phi_ioc_index': 10,
-            'feature_start_index': 4,
-            'feature_count': 2,
+            'feature_indices': [4, 5, 12, 13],
             'joystick_center': 512.0,
             'joystick_max_deviation': LaunchConfiguration('max_deviation_B'),
             'max_roll_rad': LaunchConfiguration('max_roll_rad'),

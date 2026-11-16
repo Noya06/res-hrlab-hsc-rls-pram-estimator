@@ -280,6 +280,11 @@ private:
         this->get_logger(), *this->get_clock(), 5000,
         "k_wがゼロに近いため、IOCの操舵出力を無効化します");
     }
+
+    // 非線形誤差特徴量 e_2|e_2|, e_3|e_3| の計算
+    const double e2_abs_e2 = current_e2 * std::abs(current_e2);
+    const double e3_abs_e3 = current_e3 * std::abs(current_e3);
+
     // CSV用ログデータの出力
     auto calc_result_msg = std_msgs::msg::Float64MultiArray();
     calc_result_msg.data = {
@@ -294,7 +299,9 @@ private:
       v_eta,                                    // 8: v_eta
       u,                                        // 9: u
       phi_com_y,                                // 10: phi_com_y
-      phi_hum_y                                 // 11: phi_hum_y
+      phi_hum_y,                                // 11: phi_hum_y
+      e2_abs_e2,                                // 12: e_2 * |e_2|
+      e3_abs_e3                                 // 13: e_3 * |e_3|
     };
     calc_result_pub_->publish(calc_result_msg);
 

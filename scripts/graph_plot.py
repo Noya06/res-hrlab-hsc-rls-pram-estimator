@@ -142,7 +142,7 @@ if theta_columns:
     axs[2, 1].set_xlabel('Time [s]')
     axs[2, 1].set_ylabel(r'$\hat{\theta}$')
     axs[2, 1].grid(True, linestyle=':', alpha=0.7)
-    axs[2, 1].legend()
+    axs[2, 1].legend(ncol=2)
 else:
     axs[2, 1].text(
         0.5, 0.5, 'RLS parameter columns are not available in this CSV',
@@ -167,8 +167,18 @@ else:
         ha='center', va='center')
     axs[3, 0].set_axis_off()
 
-# --- 4行目右: 未使用スロットを非表示 ---
-axs[3, 1].set_axis_off()
+# --- 4行目右: 非線形誤差項 e_2|e_2|, e_3|e_3| - time ---
+e2_abs_e2 = df['e_2_abs_e_2'] if 'e_2_abs_e_2' in df.columns else df['e_2'] * df['e_2'].abs()
+e3_abs_e3 = df['e_3_abs_e_3'] if 'e_3_abs_e_3' in df.columns else df['e_3'] * df['e_3'].abs()
+
+axs[3, 1].plot(df['time'], e2_abs_e2, color='darkorange', linewidth=2, label=r'$e_2|e_2|$')
+axs[3, 1].plot(df['time'], e3_abs_e3, color='green', linestyle='--', linewidth=2, label=r'$e_3|e_3|$')
+axs[3, 1].axhline(0, color='gray', linestyle=':', linewidth=1)
+axs[3, 1].set_title(r'Nonlinear Error Terms $e_2|e_2|, e_3|e_3|$ over Time')
+axs[3, 1].set_xlabel('Time [s]')
+axs[3, 1].set_ylabel('Value')
+axs[3, 1].grid(True, linestyle=':', alpha=0.7)
+axs[3, 1].legend()
 
 # 全体レイアウト調整後に上下の間隔(hspace)を広げる
 plt.tight_layout()
