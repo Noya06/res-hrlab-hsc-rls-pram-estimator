@@ -147,16 +147,17 @@ def plot_single_csv(csv_path: Path, output_image_path: Path = None, show: bool =
         axs[1, 1].set_title('IOC and RLS Control Signals over Time')
         axs[1, 1].set_xlabel('Time [s]')
         axs[1, 1].set_ylabel('Control input')
+        axs[1, 1].set_ylim(-1, 1)
         axs[1, 1].grid(True, linestyle=':', alpha=0.7)
         axs[1, 1].legend()
     else:
         axs[1, 1].set_axis_off()
 
-    # 3行目左: phi_hum & target_roll
+    # 3行目左: human angle and inverted target roll
     if {'phi_hum', 'target_roll'}.issubset(df.columns):
         axs[2, 0].plot(df['time'], df['phi_hum'], label=r'$\phi_{hum}$')
-        axs[2, 0].plot(df['time'], df['target_roll'], linestyle='--', label=r'$\mathrm{target\_roll}$')
-        axs[2, 0].set_title('Human angle and target roll')
+        axs[2, 0].plot(df['time'], -df['target_roll'], linestyle='--', label='-target_roll')
+        axs[2, 0].set_title('Human angle and inverted target roll')
         axs[2, 0].set_xlabel('Time [s]')
         axs[2, 0].set_ylabel('Value')
         axs[2, 0].grid(True, linestyle=':', alpha=0.7)
@@ -180,12 +181,14 @@ def plot_single_csv(csv_path: Path, output_image_path: Path = None, show: bool =
         axs[2, 1].text(0.5, 0.5, 'RLS parameters not found', ha='center', va='center')
         axs[2, 1].set_axis_off()
 
-    # 4行目左: phi_hum - target_roll
+    # 4行目左: phi_hum - (-target_roll)
     if {'phi_hum', 'target_roll'}.issubset(df.columns):
-        diff_roll = df['phi_hum'] - df['target_roll']
-        axs[3, 0].plot(df['time'], diff_roll, color='crimson', linewidth=2, label=r'$\phi_{hum} - \mathrm{target\_roll}$')
+        diff_roll = df['phi_hum'] - (-df['target_roll'])
+        axs[3, 0].plot(
+            df['time'], diff_roll, color='crimson', linewidth=2,
+            label=r'$\phi_{hum} - (-\mathrm{target\_roll})$')
         axs[3, 0].axhline(0, color='gray', linestyle=':', linewidth=1)
-        axs[3, 0].set_title('Difference: phi_hum - target_roll')
+        axs[3, 0].set_title('Difference: phi_hum - (-target_roll)')
         axs[3, 0].set_xlabel('Time [s]')
         axs[3, 0].set_ylabel('Value')
         axs[3, 0].grid(True, linestyle=':', alpha=0.7)
@@ -223,6 +226,7 @@ def plot_single_csv(csv_path: Path, output_image_path: Path = None, show: bool =
         axs[3, 1].set_title('Nonlinear / Delayed Error Terms over Time')
         axs[3, 1].set_xlabel('Time [s]')
         axs[3, 1].set_ylabel('Value')
+        axs[3, 1].set_ylim(-1, 1)
         axs[3, 1].grid(True, linestyle=':', alpha=0.7)
         axs[3, 1].legend(ncol=2)
     else:
@@ -240,6 +244,7 @@ def plot_single_csv(csv_path: Path, output_image_path: Path = None, show: bool =
         axs[4, 0].set_title('RLS Innovation Moving RMSE over Time')
         axs[4, 0].set_xlabel('Time [s]')
         axs[4, 0].set_ylabel('RMSE [rad]')
+        axs[4, 0].set_ylim(0, 1)
         axs[4, 0].grid(True, linestyle=':', alpha=0.7)
         axs[4, 0].legend()
     else:

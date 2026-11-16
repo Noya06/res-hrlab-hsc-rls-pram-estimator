@@ -9,7 +9,7 @@ import matplotlib.pyplot as plt
 # ---------------------------------------------------------
 workspace_dir = Path(__file__).resolve().parents[3]
 # プロット対象のCSV指定
-filename = workspace_dir / 'data' / 'ずっとチューニング_result_20261116_233339_steps10000.csv'
+filename = workspace_dir / 'data' / 'まともに動かず_result_20261117_001637_steps10000.csv'
 df = pd.read_csv(filename, comment='#')
 
 # 時間刻み dt の計算
@@ -111,6 +111,7 @@ axs[1, 1].plot(
 axs[1, 1].set_title('IOC and RLS Control Signals over Time')
 axs[1, 1].set_xlabel('Time [s]')
 axs[1, 1].set_ylabel('Control input')
+axs[1, 1].set_ylim(-1, 1)
 axs[1, 1].grid(True, linestyle=':', alpha=0.7)
 axs[1, 1].legend()
 
@@ -208,6 +209,7 @@ axs[3, 1].axhline(0, color='gray', linestyle=':', linewidth=1)
 axs[3, 1].set_title('Nonlinear Error Terms over Time')
 axs[3, 1].set_xlabel('Time [s]')
 axs[3, 1].set_ylabel('Value')
+axs[3, 1].set_ylim(-1, 1)
 axs[3, 1].grid(True, linestyle=':', alpha=0.7)
 axs[3, 1].legend(ncol=2)
 
@@ -223,6 +225,7 @@ if 'rls_innovation' in df.columns:
     axs[4, 0].set_title('RLS Innovation Moving RMSE over Time')
     axs[4, 0].set_xlabel('Time [s]')
     axs[4, 0].set_ylabel('RMSE [rad]')
+    axs[4, 0].set_ylim(0, 1)
     axs[4, 0].grid(True, linestyle=':', alpha=0.7)
     axs[4, 0].legend()
 else:
