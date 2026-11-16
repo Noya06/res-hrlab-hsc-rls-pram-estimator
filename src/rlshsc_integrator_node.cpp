@@ -68,6 +68,7 @@ public:
         throw std::invalid_argument("feature_scales values must be finite and non-zero");
       }
     }
+    rls_p_diag_.assign(feature_indices_.size(), 0.0);
 
     theta_sub_ = create_subscription<std_msgs::msg::Float64MultiArray>(
       "/rls/theta", 10,
@@ -101,18 +102,21 @@ public:
 private:
   void theta_callback(const std_msgs::msg::Float64MultiArray::SharedPtr msg)
   {
-    if (msg->data.size() < feature_indices_.size()) {
+    const std::size_t n = feature_indices_.size();
+    if (msg->data.size() < n) {
       RCLCPP_WARN_THROTTLE(
         get_logger(), *get_clock(), 5000,
         "RLS thetaの次元(%zu)が特徴量次元(%zu)未満です",
-        msg->data.size(), feature_indices_.size());
+        msg->data.size(), n);
       return;
     }
-    theta_.assign(msg->data.begin(), msg->data.begin() + feature_indices_.size());
-    if (msg->data.size() >= feature_indices_.size() + 3) {
-      rls_trace_P_ = msg->data[feature_indices_.size()];
-      rls_gain_norm_ = msg->data[feature_indices_.size() + 1];
-      rls_cost_ = msg->data[feature_indices_.size() + 2];
+    theta_.assign(msg->data.begin(), msg->data.begin() + n);
+    if (msg->data.size() >= 2 * n + 1) {
+      rls_innovation_ = msg->data[n];
+      rls_p_diag_.assign(msg->data.begin() + n + 1, msg->data.begin() + 2 * n + 1);
+    } else {
+      rls_innovation_ = 0.0;
+      rls_p_diag_.assign(n, 0.0);
     }
     theta_received_ = true;
   }
@@ -187,9 +191,8 @@ private:
     log_msg.data.push_back(rho);
     log_msg.data.push_back(e2_delay);
     log_msg.data.push_back(e3_delay);
-    log_msg.data.push_back(rls_trace_P_);
-    log_msg.data.push_back(rls_gain_norm_);
-    log_msg.data.push_back(rls_cost_);
+    log_msg.data.push_back(rls_innovation_);
+    log_msg.data.insert(log_msg.data.end(), rls_p_diag_.begin(), rls_p_diag_.end());
     log_pub_->publish(log_msg);
 
     geometry_msgs::msg::Twist twist;
@@ -220,9 +223,8 @@ private:
   double joystick_x_{0.0};
   double joystick_y_{0.0};
   std::vector<double> theta_;
-  double rls_trace_P_{0.0};
-  double rls_gain_norm_{0.0};
-  double rls_cost_{0.0};
+  double rls_innovation_{0.0};
+  std::vector<double> rls_p_diag_;
   rclcpp::Subscription<std_msgs::msg::Float64MultiArray>::SharedPtr theta_sub_;
   rclcpp::Subscription<std_msgs::msg::Float64MultiArray>::SharedPtr joystick_sub_;
   rclcpp::Subscription<std_msgs::msg::Float64MultiArray>::SharedPtr calc_sub_;

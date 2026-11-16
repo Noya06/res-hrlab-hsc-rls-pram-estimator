@@ -118,8 +118,10 @@ private:
       return;
     }
 
-    const std::size_t theta_end = 11 + static_cast<std::size_t>(rls_parameter_count_);
-    const std::size_t expected_size = theta_end + 11;
+    const std::size_t n = static_cast<std::size_t>(rls_parameter_count_);
+    const std::size_t theta_end = 11 + n;
+    const std::size_t p_diag_start = theta_end + 9;
+    const std::size_t expected_size = p_diag_start + n;
     if (msg->data.size() < expected_size) {
       RCLCPP_WARN_THROTTLE(
         this->get_logger(), *this->get_clock(), 5000,
@@ -152,9 +154,8 @@ private:
     row.rho         = msg->data[theta_end + 5];
     row.e_2_delay   = msg->data[theta_end + 6];
     row.e_3_delay   = msg->data[theta_end + 7];
-    row.rls_trace_P   = msg->data[theta_end + 8];
-    row.rls_gain_norm = msg->data[theta_end + 9];
-    row.rls_cost      = msg->data[theta_end + 10];
+    row.rls_innovation = msg->data[theta_end + 8];
+    row.rls_p_diag.assign(msg->data.begin() + p_diag_start, msg->data.begin() + expected_size);
 
     records_.push_back(row);
     step_count_++;
@@ -239,7 +240,15 @@ private:
     for (std::size_t i = 0; i < parameter_names_.size(); ++i) {
       file << "," << parameter_names_[i];
     }
-    file << ",e_2_abs_e_2,e_3_abs_e_3,e_2_abs_e_3,abs_e_2_e_3,bias_term,rho,e_2_delay,e_3_delay,rls_trace_P,rls_gain_norm,rls_cost\n";
+    file << ",e_2_abs_e_2,e_3_abs_e_3,e_2_abs_e_3,abs_e_2_e_3,bias_term,rho,e_2_delay,e_3_delay,rls_innovation";
+    for (const auto & name : parameter_names_) {
+      if (name.rfind("rls_theta_", 0) == 0) {
+        file << ",rls_P_" << name.substr(10);
+      } else {
+        file << ",rls_P_" << name;
+      }
+    }
+    file << "\n";
 
     for (const auto& r : records_) {
       file << r.time << "," << r.e_2 << "," << r.e_3 << "," << r.v_r << "," << r.v_xi
@@ -253,7 +262,11 @@ private:
       file << "," << r.e_2_abs_e_2 << "," << r.e_3_abs_e_3
            << "," << r.e_2_abs_e_3 << "," << r.abs_e_2_e_3 << "," << r.bias_term
            << "," << r.rho << "," << r.e_2_delay << "," << r.e_3_delay
-           << "," << r.rls_trace_P << "," << r.rls_gain_norm << "," << r.rls_cost << "\n";
+           << "," << r.rls_innovation;
+      for (const auto value : r.rls_p_diag) {
+        file << "," << value;
+      }
+      file << "\n";
     }
     
     file.close();
@@ -300,8 +313,9 @@ private:
     double position_x, position_z, yaw, joystick_x, joystick_y, phi_hum;
     double e_2_abs_e_2, e_3_abs_e_3, e_2_abs_e_3, abs_e_2_e_3, bias_term, rho;
     double e_2_delay, e_3_delay;
-    double rls_trace_P, rls_gain_norm, rls_cost;
+    double rls_innovation;
     std::vector<double> rls_parameters;
+    std::vector<double> rls_p_diag;
   };
 
   rclcpp::Subscription<std_msgs::msg::Float64MultiArray>::SharedPtr calc_result_sub_;

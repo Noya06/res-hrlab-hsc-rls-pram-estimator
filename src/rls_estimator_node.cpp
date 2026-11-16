@@ -41,7 +41,24 @@ public:
     for (std::size_t i = 0; i < parameter_count; ++i) {
       covariance_[i][i] = initial_covariance;
     }
-    trace_P_ = initial_covariance * static_cast<double>(parameter_count);
+  }
+
+  const std::vector<double> & evaluate(
+    double phi_ref_val,
+    double phi_src_val,
+    const std::vector<double> & feature_vector)
+  {
+    const std::size_t n = theta_.size();
+    if (feature_vector.size() != n) {
+      throw std::invalid_argument("Feature vector dimension does not match RLS dimension");
+    }
+    const double y = phi_ref_val - phi_src_val;
+    double prediction = 0.0;
+    for (std::size_t i = 0; i < n; ++i) {
+      prediction += feature_vector[i] * theta_[i];
+    }
+    innovation_ = y - prediction;
+    return theta_;
   }
 
   std::vector<double> update(
@@ -69,19 +86,15 @@ public:
 
     std::vector<double> gain(n, 0.0);
     double prediction = 0.0;
-    double gain_sq_sum = 0.0;
     for (std::size_t i = 0; i < n; ++i) {
       gain[i] = p_phi[i] / denominator;
-      gain_sq_sum += gain[i] * gain[i];
       prediction += feature_vector[i] * theta_[i];
     }
-    gain_norm_ = std::sqrt(gain_sq_sum);
 
-    const double innovation = y - prediction;
-    cost_ = forgetting_factor_ * cost_ + innovation * innovation;
+    innovation_ = y - prediction;
 
     for (std::size_t i = 0; i < n; ++i) {
-      theta_[i] += gain[i] * innovation;
+      theta_[i] += gain[i] * innovation_;
     }
 
     std::vector<std::vector<double>> updated = covariance_;
@@ -92,7 +105,6 @@ public:
       }
     }
     covariance_ = updated;
-    double trace_sum = 0.0;
     for (std::size_t i = 0; i < n; ++i) {
       for (std::size_t j = i + 1; j < n; ++j) {
         const double symmetric = 0.5 * (covariance_[i][j] + covariance_[j][i]);
@@ -102,24 +114,26 @@ public:
       if (!std::isfinite(covariance_[i][i]) || covariance_[i][i] < 0.0) {
         covariance_[i][i] = 0.0;
       }
-      trace_sum += covariance_[i][i];
     }
-    trace_P_ = trace_sum;
     return theta_;
   }
 
   const std::vector<double> & parameters() const noexcept { return theta_; }
-  double trace_P() const noexcept { return trace_P_; }
-  double gain_norm() const noexcept { return gain_norm_; }
-  double cost() const noexcept { return cost_; }
+  double innovation() const noexcept { return innovation_; }
+  std::vector<double> diagonal_P() const
+  {
+    std::vector<double> diag(covariance_.size(), 0.0);
+    for (std::size_t i = 0; i < covariance_.size(); ++i) {
+      diag[i] = covariance_[i][i];
+    }
+    return diag;
+  }
 
 private:
   std::vector<double> theta_;
   std::vector<std::vector<double>> covariance_;
   double forgetting_factor_;
-  double trace_P_{0.0};
-  double gain_norm_{0.0};
-  double cost_{0.0};
+  double innovation_{0.0};
 };
 
 class RlsEstimatorNode final : public rclcpp::Node
@@ -280,13 +294,13 @@ private:
     try {
       const auto theta = update_enabled_
         ? estimator_->update(phi_ref, phi_src, features)
-        : estimator_->parameters();
+        : estimator_->evaluate(phi_ref, phi_src, features);
       std_msgs::msg::Float64MultiArray msg;
       msg.data = theta;
-      // 診断情報（共分散トレース、ゲインノルム、累積コスト）を末尾に追加
-      msg.data.push_back(estimator_->trace_P());
-      msg.data.push_back(estimator_->gain_norm());
-      msg.data.push_back(estimator_->cost());
+      // 診断情報（瞬時予測誤差 innovation、共分散行列の対角成分 P_ii）を末尾に追加
+      msg.data.push_back(estimator_->innovation());
+      const auto diag_p = estimator_->diagonal_P();
+      msg.data.insert(msg.data.end(), diag_p.begin(), diag_p.end());
       theta_pub_->publish(msg);
     } catch (const std::exception & error) {
       RCLCPP_ERROR_THROTTLE(get_logger(), *get_clock(), 5000, "RLS更新をスキップ: %s", error.what());
@@ -339,7 +353,15 @@ private:
       }
       output << "sample";
       for (const auto & name : parameter_names_) output << "," << name;
-      output << ",rls_trace_P,rls_gain_norm,rls_cost\n";
+      output << ",rls_innovation";
+      for (const auto & name : parameter_names_) {
+        if (name.rfind("rls_theta_", 0) == 0) {
+          output << ",rls_P_" << name.substr(10);
+        } else {
+          output << ",rls_P_" << name;
+        }
+      }
+      output << "\n";
     }
     std::size_t sample = 0;
     while (std::getline(file, line)) {
@@ -368,9 +390,9 @@ private:
         if (output) {
           output << sample++;
           for (const auto value : theta) output << "," << value;
-          output << "," << estimator_->trace_P()
-                 << "," << estimator_->gain_norm()
-                 << "," << estimator_->cost() << "\n";
+          output << "," << estimator_->innovation();
+          for (const auto value : estimator_->diagonal_P()) output << "," << value;
+          output << "\n";
         }
       } catch (const std::exception & error) {
         RCLCPP_ERROR(get_logger(), "CSV RLS更新に失敗: %s", error.what());

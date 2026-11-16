@@ -228,38 +228,43 @@ def plot_single_csv(csv_path: Path, output_image_path: Path = None, show: bool =
     else:
         axs[3, 1].set_axis_off()
 
-    # --- 5行目左: RLS 共分散トレース Tr(P) & コスト J - time ---
-    has_p_cost = False
-    if 'rls_trace_P' in df.columns:
-        axs[4, 0].semilogy(df['time'], df['rls_trace_P'], color='blue', linewidth=2, label=r'$\mathrm{Tr}(P)$ (Uncertainty)')
-        has_p_cost = True
-    if 'rls_cost' in df.columns:
-        axs[4, 0].semilogy(df['time'], df['rls_cost'], color='purple', linestyle='--', linewidth=2, label=r'Cost $J(t)$')
-        has_p_cost = True
-
-    if has_p_cost:
-        axs[4, 0].set_title('RLS Covariance Trace $\mathrm{Tr}(P)$ and Cost $J(t)$ (Log scale)')
+    # --- 5行目左: 瞬時予測誤差 (Innovation) の移動RMS ---
+    if 'rls_innovation' in df.columns:
+        window_size = 200 if len(df) >= 200 else max(1, len(df))
+        rmse_series = np.sqrt(
+            (df['rls_innovation'] ** 2).rolling(window=window_size, min_periods=1).mean()
+        )
+        axs[4, 0].plot(
+            df['time'], rmse_series, color='purple', linewidth=2,
+            label=f'Innovation Moving RMSE (window={window_size})')
+        axs[4, 0].set_title('RLS Innovation Moving RMSE over Time')
         axs[4, 0].set_xlabel('Time [s]')
-        axs[4, 0].set_ylabel('Value (log scale)')
-        axs[4, 0].grid(True, which="both", linestyle=':', alpha=0.7)
+        axs[4, 0].set_ylabel('RMSE [rad]')
+        axs[4, 0].grid(True, linestyle=':', alpha=0.7)
         axs[4, 0].legend()
     else:
         axs[4, 0].text(
-            0.5, 0.5, 'RLS trace_P / cost columns not available',
+            0.5, 0.5, 'rls_innovation column not available',
             ha='center', va='center')
         axs[4, 0].set_axis_off()
 
-    # --- 5行目右: RLS カルマンゲインノルム ||K|| - time ---
-    if 'rls_gain_norm' in df.columns:
-        axs[4, 1].plot(df['time'], df['rls_gain_norm'], color='crimson', linewidth=2, label=r'$\|K\|$ (Learning Sensitivity)')
-        axs[4, 1].set_title('RLS Kalman Gain Norm $\|K\|$ over Time')
+    # --- 5行目右: 共分散行列の対角成分 P_ii の個別推移 ---
+    p_diag_columns = [col for col in df.columns if col.startswith('rls_P_')]
+    if p_diag_columns:
+        for col in p_diag_columns:
+            theta_key = 'rls_theta_' + col[len('rls_P_'):]
+            theta_label = PARAM_LABEL_MAP.get(theta_key, col)
+            p_label = theta_label.replace(r'\hat{\theta}', 'P') if r'\hat{\theta}' in theta_label else col
+            vals = np.maximum(df[col].to_numpy(dtype=float), 1e-12)
+            axs[4, 1].semilogy(df['time'], vals, label=p_label)
+        axs[4, 1].set_title('RLS Covariance Diagonal Elements $P_{ii}$ (Log scale)')
         axs[4, 1].set_xlabel('Time [s]')
-        axs[4, 1].set_ylabel(r'$\|K\|$')
-        axs[4, 1].grid(True, linestyle=':', alpha=0.7)
-        axs[4, 1].legend()
+        axs[4, 1].set_ylabel('$P_{ii}$ (log scale)')
+        axs[4, 1].grid(True, which='both', linestyle=':', alpha=0.7)
+        axs[4, 1].legend(ncol=2, fontsize=9)
     else:
         axs[4, 1].text(
-            0.5, 0.5, 'RLS gain_norm column not available',
+            0.5, 0.5, 'RLS covariance diagonal columns not available',
             ha='center', va='center')
         axs[4, 1].set_axis_off()
 
