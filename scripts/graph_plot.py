@@ -9,7 +9,7 @@ import matplotlib.pyplot as plt
 # ---------------------------------------------------------
 workspace_dir = Path(__file__).resolve().parents[3]
 # プロット対象のCSV指定
-filename = workspace_dir / 'data' / 'result_20261116_113410_steps10000.csv'
+filename = workspace_dir / 'data' / 'result_20261116_165319_steps10000.csv'
 df = pd.read_csv(filename, comment='#')
 
 # 時間刻み dt の計算
@@ -18,42 +18,51 @@ dt = np.diff(df['time']).mean()
 # ---------------------------------------------------------
 # 2. 運動学に基づく機体位置 (x, y) および 正解Path の算出
 # ---------------------------------------------------------
-x = np.zeros(len(df))
-y = np.zeros(len(df))
-
-for i in range(1, len(df)):
-    v_xi = df.loc[i, 'v_xi']
-    v_r  = df.loc[i, 'v_r']
-    e3   = df.loc[i, 'e_3']
-    
-    # 速度成分の分解
-    dx = (v_xi * np.cos(e3) - v_r * np.sin(e3)) * dt
-    dy = (v_xi * np.sin(e3) + v_r * np.cos(e3)) * dt
-    
-    x[i] = x[i-1] + dx
-    y[i] = y[i-1] + dy
-
-# ---------------------------------------------------------
-# SplinePathGenerator.cs と同じ計算式による正解 Path の算出
-# ---------------------------------------------------------
-# Unityの指定パラメータ設定
+# Unityの指定パラメータ設定 (SplinePathGenerator.cs と同じ計算式)
 start_z = -1.0
 main_amplitude = 1.0
 main_wavelength = 20.0
 sub_amplitude = 1.0
 sub_wavelength = 10.0
 
-# 進行方向 x に対応する dz を計算
-dz = x - start_z
-
 k1 = 2.0 * np.pi / main_wavelength
 k2 = 2.0 * np.pi / sub_wavelength
 
-wave1 = main_amplitude * np.sin(dz * k1)
-wave2 = sub_amplitude * np.sin(dz * k2)
+def calc_path_y_and_angle(x_val):
+    dz = x_val - start_z
+    y_p = main_amplitude * np.sin(dz * k1) + sub_amplitude * np.sin(dz * k2)
+    # 経路の勾配 dy/dx から接線角 theta_path を算出
+    dy_dx = (main_amplitude * k1 * np.cos(dz * k1)
+             + sub_amplitude * k2 * np.cos(dz * k2))
+    theta_p = np.arctan(dy_dx)
+    return y_p, theta_p
 
-# 正解Pathのy座標
-y_path = wave1 + wave2
+x = np.zeros(len(df))
+y = np.zeros(len(df))
+
+# 初期位置の補正（CSVに e_2 がある場合は初期横偏差を反映）
+y_init, _ = calc_path_y_and_angle(x[0])
+y[0] = y_init + (df.loc[0, 'e_2'] if 'e_2' in df.columns else 0.0)
+
+for i in range(1, len(df)):
+    v_xi = df.loc[i, 'v_xi']
+    e3   = df.loc[i, 'e_3']
+    
+    # 現在位置 x[i-1] における経路接線角を取得し、グローバル方位角 psi を算出
+    # ※ e_3 の符号定義が逆の場合は (theta_path - e3) に変更してください
+    # ※ e_3 自体がグローバル方位角の場合は psi = e3 としてください
+    _, theta_path = calc_path_y_and_angle(x[i-1])
+    psi = theta_path + e3
+    
+    # 前進速度 v_xi のみで速度成分を分解（v_r の混入による45度傾き・√2倍化を解消）
+    dx = v_xi * np.cos(psi) * dt
+    dy = v_xi * np.sin(psi) * dt
+    
+    x[i] = x[i-1] + dx
+    y[i] = y[i-1] + dy
+
+# 正解Pathのy座標（全区間）
+y_path, _ = calc_path_y_and_angle(x)
 
 # ---------------------------------------------------------
 # 3. グラフ描画の設定
@@ -67,9 +76,9 @@ plt.rcParams.update({
     'legend.fontsize': 13
 })
 
-fig, axs = plt.subplots(3, 2, figsize=(15, 16))
+fig, axs = plt.subplots(4, 2, figsize=(15, 20))
 
-# --- 左上: x-y 座標 (機体の動き vs 正解Path) ---
+# --- 1行目左: x-y 座標 (機体の動き vs 正解Path) ---
 axs[0, 0].plot(x, y, label='Vehicle Trajectory', color='blue', linewidth=2)
 axs[0, 0].plot(x, y_path, label='Reference Path', color='red', linestyle='--', linewidth=2)
 axs[0, 0].set_title('Vehicle Trajectory vs Reference Path')
@@ -79,21 +88,21 @@ axs[0, 0].grid(True, linestyle=':', alpha=0.7)
 axs[0, 0].legend()
 axs[0, 0].axis('equal')  # アスペクト比を1:1に保持
 
-# --- 右上: 横偏差 e_2 - time ---
+# --- 1行目右: 横偏差 e_2 - time ---
 axs[0, 1].plot(df['time'], df['e_2'], color='darkorange', linewidth=2)
 axs[0, 1].set_title('Lateral Error $e_2$ over Time')
 axs[0, 1].set_xlabel('Time [s]')
 axs[0, 1].set_ylabel('$e_2$ [m]')
 axs[0, 1].grid(True, linestyle=':', alpha=0.7)
 
-# --- 左中: 回転誤差 e_3 - time ---
+# --- 2行目左: 回転誤差 e_3 - time ---
 axs[1, 0].plot(df['time'], df['e_3'], color='green', linewidth=2)
 axs[1, 0].set_title('Orientation Error $e_3$ over Time')
 axs[1, 0].set_xlabel('Time [s]')
 axs[1, 0].set_ylabel('$e_3$ [rad]')
 axs[1, 0].grid(True, linestyle=':', alpha=0.7)
 
-# --- 右中: IOC/RLS control signals - time ---
+# --- 2行目右: IOC/RLS control signals - time ---
 axs[1, 1].plot(
     df['time'], df['phi_ioc'], color='purple', linewidth=2, label=r'$\phi_{ioc}$')
 axs[1, 1].plot(
@@ -108,7 +117,7 @@ axs[1, 1].set_ylabel('Control input')
 axs[1, 1].grid(True, linestyle=':', alpha=0.7)
 axs[1, 1].legend()
 
-# --- 左下: human angle and inverted target roll - time ---
+# --- 3行目左: human angle and inverted target roll - time ---
 if {'phi_hum', 'target_roll'}.issubset(df.columns):
     axs[2, 0].plot(df['time'], df['phi_hum'], label=r'$\phi_{hum}$')
     axs[2, 0].plot(
@@ -124,7 +133,7 @@ else:
         ha='center', va='center')
     axs[2, 0].set_axis_off()
 
-# --- 右下: RLS parameter changes - time ---
+# --- 3行目右: RLS parameter changes - time ---
 theta_columns = [column for column in df.columns if column.startswith('rls_theta_')]
 if theta_columns:
     for column in theta_columns:
@@ -139,6 +148,27 @@ else:
         0.5, 0.5, 'RLS parameter columns are not available in this CSV',
         ha='center', va='center')
     axs[2, 1].set_axis_off()
+
+# --- 4行目左: phi_hum - (-target_roll) - time ---
+if {'phi_hum', 'target_roll'}.issubset(df.columns):
+    diff_roll = df['phi_hum'] - (-df['target_roll'])
+    axs[3, 0].plot(
+        df['time'], diff_roll, color='crimson', linewidth=2,
+        label=r'$\phi_{hum} - (-\mathrm{target\_roll})$')
+    axs[3, 0].axhline(0, color='gray', linestyle=':', linewidth=1)
+    axs[3, 0].set_title('Difference: phi_hum - (-target_roll)')
+    axs[3, 0].set_xlabel('Time [s]')
+    axs[3, 0].set_ylabel('Value')
+    axs[3, 0].grid(True, linestyle=':', alpha=0.7)
+    axs[3, 0].legend()
+else:
+    axs[3, 0].text(
+        0.5, 0.5, 'Required columns are not available in this CSV',
+        ha='center', va='center')
+    axs[3, 0].set_axis_off()
+
+# --- 4行目右: 未使用スロットを非表示 ---
+axs[3, 1].set_axis_off()
 
 # 全体レイアウト調整後に上下の間隔(hspace)を広げる
 plt.tight_layout()

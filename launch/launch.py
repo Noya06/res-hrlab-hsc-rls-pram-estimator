@@ -15,8 +15,8 @@ def generate_launch_description():
     steps_arg = DeclareLaunchArgument(
         'steps', default_value='10000', description='総シミュレーションステップ数'
     )
-    k2_arg = DeclareLaunchArgument('k_2', default_value='2.0', description='IOC制御ゲイン k2')
-    k3_arg = DeclareLaunchArgument('k_3', default_value='0.1', description='IOC制御ゲイン k3')
+    k2_arg = DeclareLaunchArgument('k_2', default_value='1.0', description='IOC制御ゲイン k2')
+    k3_arg = DeclareLaunchArgument('k_3', default_value='0.05', description='IOC制御ゲイン k3')
     ioc_alpha_arg = DeclareLaunchArgument(
         'ioc_alpha',
         default_value='0.05',
@@ -143,7 +143,7 @@ def generate_launch_description():
         name='moza_joystick_bridge_node',
         parameters=[{
             # 使用するデバイスと軸の正規化設定
-            'device': '/dev/input/event4',
+            'device': '/dev/input/event5',
             'axis_center': 32767.5,
             'axis_scale': 32767.5,
             'deadzone': 0.02,
