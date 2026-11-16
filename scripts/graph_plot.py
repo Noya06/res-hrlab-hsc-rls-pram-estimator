@@ -9,7 +9,7 @@ import matplotlib.pyplot as plt
 # ---------------------------------------------------------
 workspace_dir = Path(__file__).resolve().parents[3]
 # プロット対象のCSV指定
-filename = workspace_dir / 'data' / 'result_20261116_191006_steps10000.csv'
+filename = workspace_dir / 'data' / 'result_20261116_193712_steps10000.csv'
 df = pd.read_csv(filename, comment='#')
 
 # 時間刻み dt の計算
@@ -143,6 +143,8 @@ param_label_map = {
     'rls_theta_5': r'$\hat{\theta}_5$ ($|e_2|e_3$)',
     'rls_theta_6': r'$\hat{\theta}_6$ (bias 1.0)',
     'rls_theta_7': r'$\hat{\theta}_7$ ($\rho$)',
+    'rls_theta_8': r'$\hat{\theta}_8$ ($e_2(t-L)$)',
+    'rls_theta_9': r'$\hat{\theta}_9$ ($e_3(t-L)$)',
     'rls_theta_e2': r'$\hat{\theta}_{e_2}$ ($e_2$)',
     'rls_theta_e3': r'$\hat{\theta}_{e_3}$ ($e_3$)',
     'rls_theta_e2_abs_e2': r'$\hat{\theta}_{e_2|e_2|}$ ($e_2|e_2|$)',
@@ -151,6 +153,8 @@ param_label_map = {
     'rls_theta_abs_e2_e3': r'$\hat{\theta}_{|e_2|e_3}$ ($|e_2|e_3$)',
     'rls_theta_bias': r'$\hat{\theta}_{\mathrm{bias}}$ (bias 1.0)',
     'rls_theta_rho': r'$\hat{\theta}_{\rho}$ ($\rho$)',
+    'rls_theta_e2_delay': r'$\hat{\theta}_{e_2(t-L)}$ ($e_2(t-L)$)',
+    'rls_theta_e3_delay': r'$\hat{\theta}_{e_3(t-L)}$ ($e_3(t-L)$)',
 }
 
 theta_columns = [column for column in df.columns if column.startswith('rls_theta_')]
@@ -199,6 +203,10 @@ axs[3, 1].plot(df['time'], e2_abs_e3, color='royalblue', linewidth=2, label=r'$e
 axs[3, 1].plot(df['time'], abs_e2_e3, color='mediumorchid', linestyle='--', linewidth=2, label=r'$|e_2|e_3$')
 if 'rho' in df.columns:
     axs[3, 1].plot(df['time'], df['rho'], color='black', linestyle=':', linewidth=2, label=r'$\rho$')
+if 'e_2_delay' in df.columns:
+    axs[3, 1].plot(df['time'], df['e_2_delay'], color='saddlebrown', linestyle='-.', linewidth=1.5, label=r'$e_2(t-L)$')
+if 'e_3_delay' in df.columns:
+    axs[3, 1].plot(df['time'], df['e_3_delay'], color='darkcyan', linestyle='-.', linewidth=1.5, label=r'$e_3(t-L)$')
 axs[3, 1].axhline(0, color='gray', linestyle=':', linewidth=1)
 axs[3, 1].set_title('Nonlinear Error Terms over Time')
 axs[3, 1].set_xlabel('Time [s]')

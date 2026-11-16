@@ -1,4 +1,5 @@
 #include <chrono>
+#include <deque>
 #include <functional>
 #include <memory>
 #include <string>
@@ -34,6 +35,7 @@ public:
     this->declare_parameter<double>("k_w", 1.0);
     this->declare_parameter<double>("rho", 0.0);
     this->declare_parameter<double>("max_control_roll", 1.0);
+    this->declare_parameter<int>("delay_cycles_L", 10);
 
     // CSV参照エラー使用モード用のパラメータ宣言
     this->declare_parameter<bool>("use_csv_errors", false);
@@ -48,6 +50,7 @@ public:
     this->get_parameter("k_w", k_w_);
     this->get_parameter("rho", rho_);
     this->get_parameter("max_control_roll", max_control_roll_);
+    this->get_parameter("delay_cycles_L", delay_cycles_L_);
     if (max_control_roll_ <= 0.0) {
       throw std::invalid_argument("max_control_roll must be positive");
     }
@@ -94,6 +97,9 @@ public:
             k_w_ = param.as_double();
           } else if (param.get_name() == "rho") {
             rho_ = param.as_double();
+          } else if (param.get_name() == "delay_cycles_L") {
+            delay_cycles_L_ = static_cast<int>(param.as_int());
+            param_updated = true;
           } else if (param.get_name() == "use_csv_errors") {
             use_csv_errors_ = param.as_bool();
             csv_updated = true;
@@ -221,6 +227,8 @@ private:
     robot_y_ = y0_;
     robot_theta_ = theta0_deg_ * M_PI / 180.0;
     step_count_ = 0;
+    e2_history_.clear();
+    e3_history_.clear();
     RCLCPP_INFO(this->get_logger(),
                 "[RESET] 初期位置・姿勢をリセットしました。 robot=(%.2f, %.2f, %.2f deg)",
                 robot_x_, robot_y_, theta0_deg_);
@@ -288,6 +296,23 @@ private:
     const double abs_e2_e3 = std::abs(current_e2) * current_e3;
     const double bias_term = 1.0;
 
+    // 遅延特徴量 e_2(t-L), e_3(t-L) の計算
+    e2_history_.push_back(current_e2);
+    e3_history_.push_back(current_e3);
+    double e2_delayed = current_e2;
+    double e3_delayed = current_e3;
+    if (delay_cycles_L_ > 0) {
+      if (e2_history_.size() > static_cast<std::size_t>(delay_cycles_L_)) {
+        e2_delayed = e2_history_.front();
+        e3_delayed = e3_history_.front();
+        e2_history_.pop_front();
+        e3_history_.pop_front();
+      } else {
+        e2_delayed = e2_history_.front();
+        e3_delayed = e3_history_.front();
+      }
+    }
+
     // CSV用ログデータの出力
     auto calc_result_msg = std_msgs::msg::Float64MultiArray();
     calc_result_msg.data = {
@@ -308,7 +333,9 @@ private:
       e2_abs_e3,                                // 14: e_2 * |e_3|
       abs_e2_e3,                                // 15: |e_2| * e_3
       bias_term,                                // 16: 1.0
-      rho_                                      // 17: 経路曲率 ρ
+      rho_,                                     // 17: 経路曲率 ρ
+      e2_delayed,                               // 18: e_2(t-L)
+      e3_delayed                                // 19: e_3(t-L)
     };
     calc_result_pub_->publish(calc_result_msg);
 
@@ -360,7 +387,12 @@ private:
   // 制御パラメータ
   double alpha_, k_2_, k_3_, c_0_, dt_;
   double k_v_, k_w_, rho_, max_control_roll_;
+  int delay_cycles_L_ = 10;
   double x0_, y0_, theta0_deg_;
+
+  // 遅延特徴量用履歴バッファ
+  std::deque<double> e2_history_;
+  std::deque<double> e3_history_;
 
   // CSV参照エラーモード用
   bool use_csv_errors_ = true;

@@ -112,12 +112,12 @@ public:
   RlsEstimatorNode()
   : Node("rls_estimator_node")
   {
-    declare_parameter<int>("parameter_count", 8);
+    declare_parameter<int>("parameter_count", 10);
     declare_parameter<double>("initial_covariance", 1.0e3);
     declare_parameter<double>("forgetting_factor", 0.99);
     declare_parameter<bool>("update_enabled", false);
     declare_parameter<std::vector<double>>("initial_parameters", std::vector<double>{});
-    declare_parameter<std::vector<int64_t>>("feature_indices", {4, 5, 12, 13, 14, 15, 16, 17});
+    declare_parameter<std::vector<int64_t>>("feature_indices", {4, 5, 12, 13, 14, 15, 16, 17, 18, 19});
     declare_parameter<std::vector<double>>("feature_scales", std::vector<double>{});
     declare_parameter<std::vector<std::string>>("parameter_names", std::vector<std::string>{});
     declare_parameter<int>("phi_ref_index", 11);
@@ -183,6 +183,8 @@ public:
         else if (idx == 15) parameter_names_.push_back("theta_abs_e2_e3");
         else if (idx == 16) parameter_names_.push_back("theta_bias");
         else if (idx == 17) parameter_names_.push_back("theta_rho");
+        else if (idx == 18) parameter_names_.push_back("theta_e2_delay");
+        else if (idx == 19) parameter_names_.push_back("theta_e3_delay");
         else parameter_names_.push_back("theta_idx_" + std::to_string(idx));
       }
     } else if (parameter_names.size() != indices.size()) {

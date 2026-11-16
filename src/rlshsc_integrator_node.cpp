@@ -17,7 +17,7 @@ public:
   : Node("rlshsc_integrator_node")
   {
     declare_parameter<int>("phi_ioc_index", 10);
-    declare_parameter<std::vector<int64_t>>("feature_indices", {4, 5, 12, 13, 14, 15, 16, 17});
+    declare_parameter<std::vector<int64_t>>("feature_indices", {4, 5, 12, 13, 14, 15, 16, 17, 18, 19});
     declare_parameter<std::vector<double>>("feature_scales", std::vector<double>{});
     declare_parameter<double>("joystick_center", 512.0);
     declare_parameter<double>("joystick_max_deviation", 512.0);
@@ -154,6 +154,10 @@ private:
       ? msg->data[16] : 1.0;
     const double rho = (msg->data.size() > 17)
       ? msg->data[17] : 0.0;
+    const double e2_delay = (msg->data.size() > 18)
+      ? msg->data[18] : msg->data[4];
+    const double e3_delay = (msg->data.size() > 19)
+      ? msg->data[19] : msg->data[5];
 
     std_msgs::msg::Float64MultiArray log_msg;
     log_msg.data = {
@@ -176,6 +180,8 @@ private:
     log_msg.data.push_back(abs_e2_e3);
     log_msg.data.push_back(bias_term);
     log_msg.data.push_back(rho);
+    log_msg.data.push_back(e2_delay);
+    log_msg.data.push_back(e3_delay);
     log_pub_->publish(log_msg);
 
     geometry_msgs::msg::Twist twist;

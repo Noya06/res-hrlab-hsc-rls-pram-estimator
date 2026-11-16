@@ -21,7 +21,7 @@ public:
     // パラメータの宣言（dt=0.01s の場合、10秒間で1000ステップ）
     this->declare_parameter<int>("steps", 10000);
     this->declare_parameter<std::string>("output_dir", "/home/hurolab/Programs/colcon_ws/data/datafiles");
-    this->declare_parameter<int>("rls_parameter_count", 8);
+    this->declare_parameter<int>("rls_parameter_count", 10);
     this->declare_parameter<std::vector<std::string>>(
       "parameter_names",
       std::vector<std::string>{
@@ -32,7 +32,9 @@ public:
         "rls_theta_e2_abs_e3",
         "rls_theta_abs_e2_e3",
         "rls_theta_bias",
-        "rls_theta_rho"
+        "rls_theta_rho",
+        "rls_theta_e2_delay",
+        "rls_theta_e3_delay"
       });
 
     // パラメータの取得
@@ -117,7 +119,7 @@ private:
     }
 
     const std::size_t theta_end = 11 + static_cast<std::size_t>(rls_parameter_count_);
-    const std::size_t expected_size = theta_end + 6;
+    const std::size_t expected_size = theta_end + 8;
     if (msg->data.size() < expected_size) {
       RCLCPP_WARN_THROTTLE(
         this->get_logger(), *this->get_clock(), 5000,
@@ -148,6 +150,8 @@ private:
     row.abs_e_2_e_3 = msg->data[theta_end + 3];
     row.bias_term   = msg->data[theta_end + 4];
     row.rho         = msg->data[theta_end + 5];
+    row.e_2_delay   = msg->data[theta_end + 6];
+    row.e_3_delay   = msg->data[theta_end + 7];
 
     records_.push_back(row);
     step_count_++;
@@ -232,7 +236,7 @@ private:
     for (std::size_t i = 0; i < parameter_names_.size(); ++i) {
       file << "," << parameter_names_[i];
     }
-    file << ",e_2_abs_e_2,e_3_abs_e_3,e_2_abs_e_3,abs_e_2_e_3,bias_term,rho\n";
+    file << ",e_2_abs_e_2,e_3_abs_e_3,e_2_abs_e_3,abs_e_2_e_3,bias_term,rho,e_2_delay,e_3_delay\n";
 
     for (const auto& r : records_) {
       file << r.time << "," << r.e_2 << "," << r.e_3 << "," << r.v_r << "," << r.v_xi
@@ -245,7 +249,7 @@ private:
       }
       file << "," << r.e_2_abs_e_2 << "," << r.e_3_abs_e_3
            << "," << r.e_2_abs_e_3 << "," << r.abs_e_2_e_3 << "," << r.bias_term
-           << "," << r.rho << "\n";
+           << "," << r.rho << "," << r.e_2_delay << "," << r.e_3_delay << "\n";
     }
     
     file.close();
@@ -291,6 +295,7 @@ private:
     double time, e_2, e_3, v_r, v_xi, phi_ioc, rls_prediction, target_roll;
     double position_x, position_z, yaw, joystick_x, joystick_y, phi_hum;
     double e_2_abs_e_2, e_3_abs_e_3, e_2_abs_e_3, abs_e_2_e_3, bias_term, rho;
+    double e_2_delay, e_3_delay;
     std::vector<double> rls_parameters;
   };
 
@@ -303,7 +308,7 @@ private:
   rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr csv_saved_pub_;
   
   int max_steps_;
-  int rls_parameter_count_ = 8;
+  int rls_parameter_count_ = 10;
   std::vector<std::string> parameter_names_;
   std::string output_dir_;
   int step_count_ = 0;
