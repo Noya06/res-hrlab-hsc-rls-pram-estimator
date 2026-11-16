@@ -17,7 +17,7 @@ public:
   : Node("rlshsc_integrator_node")
   {
     declare_parameter<int>("phi_ioc_index", 10);
-    declare_parameter<std::vector<int64_t>>("feature_indices", {4, 5, 12, 13});
+    declare_parameter<std::vector<int64_t>>("feature_indices", {4, 5, 12, 13, 14, 15, 16});
     declare_parameter<double>("joystick_center", 512.0);
     declare_parameter<double>("joystick_max_deviation", 512.0);
     declare_parameter<double>("max_roll_rad", 1.0);
@@ -128,6 +128,12 @@ private:
       ? msg->data[12] : (msg->data[4] * std::abs(msg->data[4]));
     const double e3_abs_e3 = (msg->data.size() > 13)
       ? msg->data[13] : (msg->data[5] * std::abs(msg->data[5]));
+    const double e2_abs_e3 = (msg->data.size() > 14)
+      ? msg->data[14] : (msg->data[4] * std::abs(msg->data[5]));
+    const double abs_e2_e3 = (msg->data.size() > 15)
+      ? msg->data[15] : (std::abs(msg->data[4]) * msg->data[5]);
+    const double bias_term = (msg->data.size() > 16)
+      ? msg->data[16] : 1.0;
 
     std_msgs::msg::Float64MultiArray log_msg;
     log_msg.data = {
@@ -146,6 +152,9 @@ private:
     log_msg.data.insert(log_msg.data.end(), theta_.begin(), theta_.end());
     log_msg.data.push_back(e2_abs_e2);
     log_msg.data.push_back(e3_abs_e3);
+    log_msg.data.push_back(e2_abs_e3);
+    log_msg.data.push_back(abs_e2_e3);
+    log_msg.data.push_back(bias_term);
     log_pub_->publish(log_msg);
 
     geometry_msgs::msg::Twist twist;

@@ -21,7 +21,7 @@ public:
     // パラメータの宣言（dt=0.01s の場合、10秒間で1000ステップ）
     this->declare_parameter<int>("steps", 10000);
     this->declare_parameter<std::string>("output_dir", "/home/hurolab/Programs/colcon_ws/data/datafiles");
-    this->declare_parameter<int>("rls_parameter_count", 4);
+    this->declare_parameter<int>("rls_parameter_count", 7);
 
     // パラメータの取得
     this->get_parameter("steps", max_steps_);
@@ -98,7 +98,7 @@ private:
     }
 
     const std::size_t theta_end = 11 + static_cast<std::size_t>(rls_parameter_count_);
-    const std::size_t expected_size = theta_end + 2;
+    const std::size_t expected_size = theta_end + 5;
     if (msg->data.size() < expected_size) {
       RCLCPP_WARN_THROTTLE(
         this->get_logger(), *this->get_clock(), 5000,
@@ -125,6 +125,9 @@ private:
     row.rls_parameters.assign(msg->data.begin() + 11, msg->data.begin() + theta_end);
     row.e_2_abs_e_2 = msg->data[theta_end];
     row.e_3_abs_e_3 = msg->data[theta_end + 1];
+    row.e_2_abs_e_3 = msg->data[theta_end + 2];
+    row.abs_e_2_e_3 = msg->data[theta_end + 3];
+    row.bias_term   = msg->data[theta_end + 4];
 
     records_.push_back(row);
     step_count_++;
@@ -209,7 +212,7 @@ private:
     for (int i = 0; i < rls_parameter_count_; ++i) {
       file << ",rls_theta_" << i;
     }
-    file << ",e_2_abs_e_2,e_3_abs_e_3\n";
+    file << ",e_2_abs_e_2,e_3_abs_e_3,e_2_abs_e_3,abs_e_2_e_3,bias_term\n";
 
     for (const auto& r : records_) {
       file << r.time << "," << r.e_2 << "," << r.e_3 << "," << r.v_r << "," << r.v_xi
@@ -220,7 +223,8 @@ private:
       for (const auto value : r.rls_parameters) {
         file << "," << value;
       }
-      file << "," << r.e_2_abs_e_2 << "," << r.e_3_abs_e_3 << "\n";
+      file << "," << r.e_2_abs_e_2 << "," << r.e_3_abs_e_3
+           << "," << r.e_2_abs_e_3 << "," << r.abs_e_2_e_3 << "," << r.bias_term << "\n";
     }
     
     file.close();
@@ -265,7 +269,7 @@ private:
   struct CsvRow {
     double time, e_2, e_3, v_r, v_xi, phi_ioc, rls_prediction, target_roll;
     double position_x, position_z, yaw, joystick_x, joystick_y, phi_hum;
-    double e_2_abs_e_2, e_3_abs_e_3;
+    double e_2_abs_e_2, e_3_abs_e_3, e_2_abs_e_3, abs_e_2_e_3, bias_term;
     std::vector<double> rls_parameters;
   };
 
@@ -278,7 +282,7 @@ private:
   rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr csv_saved_pub_;
   
   int max_steps_;
-  int rls_parameter_count_ = 4;
+  int rls_parameter_count_ = 7;
   std::string output_dir_;
   int step_count_ = 0;
   bool simulation_done_published_ = false;

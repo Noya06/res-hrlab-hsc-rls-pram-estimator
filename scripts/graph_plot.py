@@ -9,7 +9,7 @@ import matplotlib.pyplot as plt
 # ---------------------------------------------------------
 workspace_dir = Path(__file__).resolve().parents[3]
 # プロット対象のCSV指定
-filename = workspace_dir / 'data' / 'result_20261116_165319_steps10000.csv'
+filename = workspace_dir / 'data' / '2条追加result_20261116_175106_steps10000.csv'
 df = pd.read_csv(filename, comment='#')
 
 # 時間刻み dt の計算
@@ -167,18 +167,22 @@ else:
         ha='center', va='center')
     axs[3, 0].set_axis_off()
 
-# --- 4行目右: 非線形誤差項 e_2|e_2|, e_3|e_3| - time ---
+# --- 4行目右: 非線形誤差項 e_2|e_2|, e_3|e_3|, e_2|e_3|, |e_2|e_3 - time ---
 e2_abs_e2 = df['e_2_abs_e_2'] if 'e_2_abs_e_2' in df.columns else df['e_2'] * df['e_2'].abs()
 e3_abs_e3 = df['e_3_abs_e_3'] if 'e_3_abs_e_3' in df.columns else df['e_3'] * df['e_3'].abs()
+e2_abs_e3 = df['e_2_abs_e_3'] if 'e_2_abs_e_3' in df.columns else df['e_2'] * df['e_3'].abs()
+abs_e2_e3 = df['abs_e_2_e_3'] if 'abs_e_2_e_3' in df.columns else df['e_2'].abs() * df['e_3']
 
 axs[3, 1].plot(df['time'], e2_abs_e2, color='darkorange', linewidth=2, label=r'$e_2|e_2|$')
 axs[3, 1].plot(df['time'], e3_abs_e3, color='green', linestyle='--', linewidth=2, label=r'$e_3|e_3|$')
+axs[3, 1].plot(df['time'], e2_abs_e3, color='royalblue', linewidth=2, label=r'$e_2|e_3|$')
+axs[3, 1].plot(df['time'], abs_e2_e3, color='mediumorchid', linestyle='--', linewidth=2, label=r'$|e_2|e_3$')
 axs[3, 1].axhline(0, color='gray', linestyle=':', linewidth=1)
-axs[3, 1].set_title(r'Nonlinear Error Terms $e_2|e_2|, e_3|e_3|$ over Time')
+axs[3, 1].set_title('Nonlinear Error Terms over Time')
 axs[3, 1].set_xlabel('Time [s]')
 axs[3, 1].set_ylabel('Value')
 axs[3, 1].grid(True, linestyle=':', alpha=0.7)
-axs[3, 1].legend()
+axs[3, 1].legend(ncol=2)
 
 # 全体レイアウト調整後に上下の間隔(hspace)を広げる
 plt.tight_layout()
