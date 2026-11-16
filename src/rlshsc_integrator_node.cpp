@@ -101,14 +101,19 @@ public:
 private:
   void theta_callback(const std_msgs::msg::Float64MultiArray::SharedPtr msg)
   {
-    if (msg->data.size() != feature_indices_.size()) {
+    if (msg->data.size() < feature_indices_.size()) {
       RCLCPP_WARN_THROTTLE(
         get_logger(), *get_clock(), 5000,
-        "RLS thetaの次元(%zu)が特徴量次元(%zu)と一致しません",
+        "RLS thetaの次元(%zu)が特徴量次元(%zu)未満です",
         msg->data.size(), feature_indices_.size());
       return;
     }
-    theta_ = msg->data;
+    theta_.assign(msg->data.begin(), msg->data.begin() + feature_indices_.size());
+    if (msg->data.size() >= feature_indices_.size() + 3) {
+      rls_trace_P_ = msg->data[feature_indices_.size()];
+      rls_gain_norm_ = msg->data[feature_indices_.size() + 1];
+      rls_cost_ = msg->data[feature_indices_.size() + 2];
+    }
     theta_received_ = true;
   }
 
@@ -182,6 +187,9 @@ private:
     log_msg.data.push_back(rho);
     log_msg.data.push_back(e2_delay);
     log_msg.data.push_back(e3_delay);
+    log_msg.data.push_back(rls_trace_P_);
+    log_msg.data.push_back(rls_gain_norm_);
+    log_msg.data.push_back(rls_cost_);
     log_pub_->publish(log_msg);
 
     geometry_msgs::msg::Twist twist;
@@ -212,6 +220,9 @@ private:
   double joystick_x_{0.0};
   double joystick_y_{0.0};
   std::vector<double> theta_;
+  double rls_trace_P_{0.0};
+  double rls_gain_norm_{0.0};
+  double rls_cost_{0.0};
   rclcpp::Subscription<std_msgs::msg::Float64MultiArray>::SharedPtr theta_sub_;
   rclcpp::Subscription<std_msgs::msg::Float64MultiArray>::SharedPtr joystick_sub_;
   rclcpp::Subscription<std_msgs::msg::Float64MultiArray>::SharedPtr calc_sub_;

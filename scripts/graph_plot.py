@@ -76,7 +76,7 @@ plt.rcParams.update({
     'legend.fontsize': 13
 })
 
-fig, axs = plt.subplots(4, 2, figsize=(15, 20))
+fig, axs = plt.subplots(5, 2, figsize=(15, 25))
 
 # --- 1行目左: x-y 座標 (機体の動き vs 正解Path) ---
 axs[0, 0].plot(x, y, label='Vehicle Trajectory', color='blue', linewidth=2)
@@ -211,8 +211,45 @@ axs[3, 1].axhline(0, color='gray', linestyle=':', linewidth=1)
 axs[3, 1].set_title('Nonlinear Error Terms over Time')
 axs[3, 1].set_xlabel('Time [s]')
 axs[3, 1].set_ylabel('Value')
-axs[3, 1].grid(True, linestyle=':', alpha=0.7)
-axs[3, 1].legend(ncol=2)
+    axs[3, 1].grid(True, linestyle=':', alpha=0.7)
+    axs[3, 1].legend(ncol=2)
+else:
+    axs[3, 1].set_axis_off()
+
+# --- 5行目左: RLS 共分散トレース Tr(P) & コスト J - time ---
+has_p_cost = False
+if 'rls_trace_P' in df.columns:
+    axs[4, 0].semilogy(df['time'], df['rls_trace_P'], color='blue', linewidth=2, label=r'$\mathrm{Tr}(P)$ (Uncertainty)')
+    has_p_cost = True
+if 'rls_cost' in df.columns:
+    axs[4, 0].semilogy(df['time'], df['rls_cost'], color='purple', linestyle='--', linewidth=2, label=r'Cost $J(t)$')
+    has_p_cost = True
+
+if has_p_cost:
+    axs[4, 0].set_title('RLS Covariance Trace $\mathrm{Tr}(P)$ and Cost $J(t)$ (Log scale)')
+    axs[4, 0].set_xlabel('Time [s]')
+    axs[4, 0].set_ylabel('Value (log scale)')
+    axs[4, 0].grid(True, which="both", linestyle=':', alpha=0.7)
+    axs[4, 0].legend()
+else:
+    axs[4, 0].text(
+        0.5, 0.5, 'RLS trace_P / cost columns are not available in this CSV',
+        ha='center', va='center')
+    axs[4, 0].set_axis_off()
+
+# --- 5行目右: RLS カルマンゲインノルム ||K|| - time ---
+if 'rls_gain_norm' in df.columns:
+    axs[4, 1].plot(df['time'], df['rls_gain_norm'], color='crimson', linewidth=2, label=r'$\|K\|$ (Learning Sensitivity)')
+    axs[4, 1].set_title('RLS Kalman Gain Norm $\|K\|$ over Time')
+    axs[4, 1].set_xlabel('Time [s]')
+    axs[4, 1].set_ylabel(r'$\|K\|$')
+    axs[4, 1].grid(True, linestyle=':', alpha=0.7)
+    axs[4, 1].legend()
+else:
+    axs[4, 1].text(
+        0.5, 0.5, 'RLS gain_norm column is not available in this CSV',
+        ha='center', va='center')
+    axs[4, 1].set_axis_off()
 
 # 全体レイアウト調整後に上下の間隔(hspace)を広げる
 plt.tight_layout()
