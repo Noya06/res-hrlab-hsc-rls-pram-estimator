@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 import rclpy
 from rclpy.node import Node
-from std_msgs.msg import Float64
+from rclpy.qos import QoSProfile, DurabilityPolicy
+from std_msgs.msg import Float64, Bool
 from evdev import InputDevice, ecodes, ff
 import errno
 
@@ -42,6 +43,21 @@ class JoystickFFBNode(Node):
         self.prev_time = self.get_clock().now()
         self.filtered_level = 0.0
 
+        # TrueのときFFBを停止するフラグ（起動直後から止めたい場合は True に変更）
+        self.update_enabled = False
+
+        # rclcpp::QoS(1).transient_local() と同等のQoS設定
+        transient_qos = QoSProfile(
+            depth=1,
+            durability=DurabilityPolicy.TRANSIENT_LOCAL
+        )
+        self.update_enabled_sub = self.create_subscription(
+            Bool,
+            '/rls/update_enabled',
+            self.update_enabled_callback,
+            transient_qos
+        )
+
         self.subscription = self.create_subscription(
             Float64,
             '/joystick/target_roll',
@@ -71,28 +87,16 @@ class JoystickFFBNode(Node):
             self.get_logger().error(f'Failed to upload initial FFB effect: {e}')
             self.device = None 
 
-    def target_roll_callback(self, msg):
+    def update_enabled_callback(self, msg: Bool):
+        self.update_enabled = msg.data
+        if self.update_enabled:
+            # Trueになったら即座に反力を0にしてフィルタ状態もリセット
+            self.filtered_level = 0.0
+            self.set_ffb_force(0)
+
+    def set_ffb_force(self, level: int):
         if self.device is None or self.effect_id is None:
             return
-
-        current_time = self.get_clock().now()
-        target_roll = msg.data
-
-        # 経過時間(dt)と目標値の変化量(derivative)を計算
-        dt = (current_time - self.prev_time).nanoseconds / 1e9
-        derivative = 0.0
-        if dt > 0.001:
-            derivative = (target_roll - self.prev_target_roll) / dt
-
-        self.prev_target_roll = target_roll
-        self.prev_time = current_time
-
-        # PゲインとDゲインを合成してフィードバック量を計算
-        raw_level = int((target_roll * self.p_gain) + (derivative * self.d_gain))
-        
-        # 反力を平滑化し、最大反力を制限する。これはFFBだけに適用される。
-        self.filtered_level += self.force_filter_alpha * (raw_level - self.filtered_level)
-        level = int(max(min(self.filtered_level, self.max_force_level), -self.max_force_level))
 
         try:
             if level == 0:
@@ -127,6 +131,38 @@ class JoystickFFBNode(Node):
         except Exception as e:
             self.get_logger().warn(f'Failed to update FFB effect: {e}')
 
+    def target_roll_callback(self, msg):
+        if self.device is None or self.effect_id is None:
+            return
+
+        current_time = self.get_clock().now()
+        target_roll = msg.data
+
+        # TrueのときはFFBを動かさない（再開時のD項スパイクを防ぐため前回値のみ更新）
+        if self.update_enabled:
+            self.prev_target_roll = target_roll
+            self.prev_time = current_time
+            self.filtered_level = 0.0
+            return
+
+        # 経過時間(dt)と目標値の変化量(derivative)を計算
+        dt = (current_time - self.prev_time).nanoseconds / 1e9
+        derivative = 0.0
+        if dt > 0.001:
+            derivative = (target_roll - self.prev_target_roll) / dt
+
+        self.prev_target_roll = target_roll
+        self.prev_time = current_time
+
+        # PゲインとDゲインを合成してフィードバック量を計算
+        raw_level = int((target_roll * self.p_gain) + (derivative * self.d_gain))
+        
+        # 反力を平滑化し、最大反力を制限する。これはFFBだけに適用される。
+        self.filtered_level += self.force_filter_alpha * (raw_level - self.filtered_level)
+        level = int(max(min(self.filtered_level, self.max_force_level), -self.max_force_level))
+
+        self.set_ffb_force(level)
+
     def destroy_node(self):
         if self.device is not None and self.effect_id is not None:
             try:
@@ -134,7 +170,7 @@ class JoystickFFBNode(Node):
                 self.device.erase_effect(self.effect_id)
                 self.get_logger().info('Erased FFB effect.')
             except Exception as e:
-                 self.get_logger().error(f'Error while stopping FFB: {e}')
+                self.get_logger().error(f'Error while stopping FFB: {e}')
         super().destroy_node()
 
 def main(args=None):

@@ -34,7 +34,7 @@ def generate_launch_description():
     )
     rls_gain_arg = DeclareLaunchArgument(
         'rls_gain',
-        default_value='1.5',
+        default_value='1.0',
         description='RLS統合時のRLS補正出力ゲイン',
     )
     forgetting_factor_arg = DeclareLaunchArgument(
