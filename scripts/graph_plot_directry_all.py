@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 /data/datafiles ディレクトリ内のすべてのCSVファイルを一括でグラフ化し、
-画像(PNG)として保存するスクリプト。
+4グラフずつ2枚の画像(PNG)として保存するスクリプト。
 """
 
 import argparse
@@ -57,7 +57,7 @@ PARAM_LABEL_MAP = {
 
 
 def plot_single_csv(csv_path: Path, output_image_path: Path = None, show: bool = False) -> bool:
-    """単一のCSVファイルをグラフ化して保存する"""
+    """単一のCSVファイルを4グラフずつ2枚の画像にして保存する"""
     try:
         df = pd.read_csv(csv_path, comment='#')
     except Exception as e:
@@ -90,170 +90,131 @@ def plot_single_csv(csv_path: Path, output_image_path: Path = None, show: bool =
 
     # グラフ描画設定
     plt.rcParams.update({
-        'font.size': 12,
+        'font.size': 11,
         'axes.titlesize': 11,
-        'axes.labelsize': 12,
+        'axes.labelsize': 11,
         'xtick.labelsize': 10,
         'ytick.labelsize': 10,
-        'legend.fontsize': 10
+        'legend.fontsize': 9.5
     })
 
-    fig, axs = plt.subplots(5, 2, figsize=(15, 25))
-    fig.suptitle(f"Dataset: {csv_path.name}", fontsize=14, y=0.995)
+    # =========================================================
+    # 1枚目: 軌道・追従誤差・制御信号 (2行 x 2列, 16:9)
+    # =========================================================
+    fig1, axs1 = plt.subplots(2, 2, figsize=(16, 9))
+    fig1.suptitle(f"Dataset: {csv_path.name} (1/2: Trajectory & Control)", fontsize=13, y=0.98)
 
     # 1行目左: Vehicle Trajectory
-    axs[0, 0].plot(x, y, label='Vehicle Trajectory', color='blue', linewidth=2)
-    axs[0, 0].plot(x, y_path, label='Reference Path', color='red', linestyle='--', linewidth=2)
-    axs[0, 0].set_title('Vehicle Trajectory vs Reference Path')
-    axs[0, 0].set_xlabel('x [m]')
-    axs[0, 0].set_ylabel('y [m]')
-    axs[0, 0].grid(True, linestyle=':', alpha=0.7)
-    axs[0, 0].legend()
-    axs[0, 0].axis('equal')
+    axs1[0, 0].plot(x, y, label='Vehicle Trajectory', color='blue', linewidth=2)
+    axs1[0, 0].plot(x, y_path, label='Reference Path', color='red', linestyle='--', linewidth=2)
+    axs1[0, 0].set_title('Vehicle Trajectory vs Reference Path')
+    axs1[0, 0].set_xlabel('x [m]')
+    axs1[0, 0].set_ylabel('y [m]')
+    axs1[0, 0].grid(True, linestyle=':', alpha=0.7)
+    axs1[0, 0].legend()
+    axs1[0, 0].axis('equal')
 
     # 1行目右: e_2
     if 'e_2' in df.columns:
-        axs[0, 1].plot(df['time'], df['e_2'], color='darkorange', linewidth=2)
-        axs[0, 1].set_title('Lateral Error $e_2$ over Time')
-        axs[0, 1].set_xlabel('Time [s]')
-        axs[0, 1].set_ylabel('$e_2$ [m]')
-        axs[0, 1].grid(True, linestyle=':', alpha=0.7)
+        axs1[0, 1].plot(df['time'], df['e_2'], color='darkorange', linewidth=2)
+        axs1[0, 1].set_title('Lateral Error $e_2$ over Time')
+        axs1[0, 1].set_xlabel('Time [s]')
+        axs1[0, 1].set_ylabel('$e_2$ [m]')
+        axs1[0, 1].grid(True, linestyle=':', alpha=0.7)
     else:
-        axs[0, 1].set_axis_off()
+        axs1[0, 1].set_axis_off()
 
     # 2行目左: e_3
     if 'e_3' in df.columns:
-        axs[1, 0].plot(df['time'], df['e_3'], color='green', linewidth=2)
-        axs[1, 0].set_title('Orientation Error $e_3$ over Time')
-        axs[1, 0].set_xlabel('Time [s]')
-        axs[1, 0].set_ylabel('$e_3$ [rad]')
-        axs[1, 0].grid(True, linestyle=':', alpha=0.7)
+        axs1[1, 0].plot(df['time'], df['e_3'], color='green', linewidth=2)
+        axs1[1, 0].set_title('Orientation Error $e_3$ over Time')
+        axs1[1, 0].set_xlabel('Time [s]')
+        axs1[1, 0].set_ylabel('$e_3$ [rad]')
+        axs1[1, 0].grid(True, linestyle=':', alpha=0.7)
     else:
-        axs[1, 0].set_axis_off()
+        axs1[1, 0].set_axis_off()
 
     # 2行目右: IOC/RLS signals
     has_ioc_rls = False
     if 'phi_ioc' in df.columns:
-        axs[1, 1].plot(df['time'], df['phi_ioc'], color='purple', linewidth=2, label=r'$\phi_{ioc}$')
+        axs1[1, 1].plot(df['time'], df['phi_ioc'], color='purple', linewidth=2, label=r'$\phi_{ioc}$')
         has_ioc_rls = True
     if 'rls_prediction' in df.columns:
-        axs[1, 1].plot(df['time'], df['rls_prediction'], color='teal', linewidth=2, label='RLS prediction')
+        axs1[1, 1].plot(df['time'], df['rls_prediction'], color='teal', linewidth=2, label='RLS prediction')
         has_ioc_rls = True
     if 'target_roll' in df.columns:
-        axs[1, 1].plot(df['time'], df['target_roll'], color='black', linestyle='--', linewidth=2, label=r'$\phi_{ioc}$ + RLS')
+        axs1[1, 1].plot(df['time'], df['target_roll'], color='black', linestyle='--', linewidth=2, label=r'$\phi_{ioc}$ + RLS')
         has_ioc_rls = True
 
     if has_ioc_rls:
-        axs[1, 1].set_title('IOC and RLS Control Signals over Time')
-        axs[1, 1].set_xlabel('Time [s]')
-        axs[1, 1].set_ylabel('Control input')
-        axs[1, 1].set_ylim(-1, 1)
-        axs[1, 1].grid(True, linestyle=':', alpha=0.7)
-        axs[1, 1].legend()
+        axs1[1, 1].set_title('IOC and RLS Control Signals over Time')
+        axs1[1, 1].set_xlabel('Time [s]')
+        axs1[1, 1].set_ylabel('Control input')
+        axs1[1, 1].set_ylim(-1, 1)
+        axs1[1, 1].grid(True, linestyle=':', alpha=0.7)
+        axs1[1, 1].legend()
     else:
-        axs[1, 1].set_axis_off()
+        axs1[1, 1].set_axis_off()
 
-    # 3行目左: human angle and inverted target roll
+    plt.tight_layout()
+    fig1.subplots_adjust(top=0.91, hspace=0.32, wspace=0.22)
+
+    # =========================================================
+    # 2枚目: 人間入力比較 & RLS詳細 (2行 x 2列, 16:9)
+    # =========================================================
+    fig2, axs2 = plt.subplots(2, 2, figsize=(16, 9))
+    fig2.suptitle(f"Dataset: {csv_path.name} (2/2: Human Roll & RLS Diagnostics)", fontsize=13, y=0.98)
+
+    # 1行目左: human angle and inverted target roll
     if {'phi_hum', 'target_roll'}.issubset(df.columns):
-        axs[2, 0].plot(df['time'], df['phi_hum'], label=r'$\phi_{hum}$')
-        axs[2, 0].plot(df['time'], -df['target_roll'], linestyle='--', label='-target_roll')
-        axs[2, 0].set_title('Human angle and inverted target roll')
-        axs[2, 0].set_xlabel('Time [s]')
-        axs[2, 0].set_ylabel('Value')
-        axs[2, 0].grid(True, linestyle=':', alpha=0.7)
-        axs[2, 0].legend()
+        axs2[0, 0].plot(df['time'], df['phi_hum'], label=r'$\phi_{hum}$')
+        axs2[0, 0].plot(df['time'], -df['target_roll'], linestyle='--', label='-target_roll')
+        axs2[0, 0].set_title('Human angle and inverted target roll')
+        axs2[0, 0].set_xlabel('Time [s]')
+        axs2[0, 0].set_ylabel('Value')
+        axs2[0, 0].grid(True, linestyle=':', alpha=0.7)
+        axs2[0, 0].legend()
     else:
-        axs[2, 0].text(0.5, 0.5, 'Required columns not found', ha='center', va='center')
-        axs[2, 0].set_axis_off()
+        axs2[0, 0].text(0.5, 0.5, 'Required columns not found', ha='center', va='center')
+        axs2[0, 0].set_axis_off()
 
-    # 3行目右: RLS parameter changes
+    # 1行目右: RLS parameter changes
     theta_columns = [col for col in df.columns if col.startswith('rls_theta_')]
     if theta_columns:
         for col in theta_columns:
             display_label = PARAM_LABEL_MAP.get(col, col)
-            axs[2, 1].plot(df['time'], df[col], label=display_label)
-        axs[2, 1].set_title('RLS parameter changes')
-        axs[2, 1].set_xlabel('Time [s]')
-        axs[2, 1].set_ylabel(r'$\hat{\theta}$')
-        axs[2, 1].grid(True, linestyle=':', alpha=0.7)
-        axs[2, 1].legend(ncol=2, fontsize=9)
+            axs2[0, 1].plot(df['time'], df[col], label=display_label)
+        axs2[0, 1].set_title('RLS parameter changes')
+        axs2[0, 1].set_xlabel('Time [s]')
+        axs2[0, 1].set_ylabel(r'$\hat{\theta}$')
+        axs2[0, 1].grid(True, linestyle=':', alpha=0.7)
+        axs2[0, 1].legend(ncol=2, fontsize=8.5)
     else:
-        axs[2, 1].text(0.5, 0.5, 'RLS parameters not found', ha='center', va='center')
-        axs[2, 1].set_axis_off()
+        axs2[0, 1].text(0.5, 0.5, 'RLS parameters not found', ha='center', va='center')
+        axs2[0, 1].set_axis_off()
 
-    # 4行目左: phi_hum - (-target_roll)
-    if {'phi_hum', 'target_roll'}.issubset(df.columns):
-        diff_roll = df['phi_hum'] - (-df['target_roll'])
-        axs[3, 0].plot(
-            df['time'], diff_roll, color='crimson', linewidth=2,
-            label=r'$\phi_{hum} - (-\mathrm{target\_roll})$')
-        axs[3, 0].axhline(0, color='gray', linestyle=':', linewidth=1)
-        axs[3, 0].set_title('Difference: phi_hum - (-target_roll)')
-        axs[3, 0].set_xlabel('Time [s]')
-        axs[3, 0].set_ylabel('Value')
-        axs[3, 0].grid(True, linestyle=':', alpha=0.7)
-        axs[3, 0].legend()
-    else:
-        axs[3, 0].text(0.5, 0.5, 'Required columns not found', ha='center', va='center')
-        axs[3, 0].set_axis_off()
-
-    # 4行目右: 非線形誤差項
-    has_nl = False
-    if 'e_2' in df.columns and 'e_3' in df.columns:
-        e2_abs_e2 = df['e_2_abs_e_2'] if 'e_2_abs_e_2' in df.columns else df['e_2'] * df['e_2'].abs()
-        e3_abs_e3 = df['e_3_abs_e_3'] if 'e_3_abs_e_3' in df.columns else df['e_3'] * df['e_3'].abs()
-        e2_abs_e3 = df['e_2_abs_e_3'] if 'e_2_abs_e_3' in df.columns else df['e_2'] * df['e_3'].abs()
-        abs_e2_e3 = df['abs_e_2_e_3'] if 'abs_e_2_e_3' in df.columns else df['e_2'].abs() * df['e_3']
-
-        axs[3, 1].plot(df['time'], e2_abs_e2, color='darkorange', linewidth=2, label=r'$e_2|e_2|$')
-        axs[3, 1].plot(df['time'], e3_abs_e3, color='green', linestyle='--', linewidth=2, label=r'$e_3|e_3|$')
-        axs[3, 1].plot(df['time'], e2_abs_e3, color='royalblue', linewidth=2, label=r'$e_2|e_3|$')
-        axs[3, 1].plot(df['time'], abs_e2_e3, color='mediumorchid', linestyle='--', linewidth=2, label=r'$|e_2|e_3$')
-        has_nl = True
-
-    if 'rho' in df.columns:
-        axs[3, 1].plot(df['time'], df['rho'], color='black', linestyle=':', linewidth=2, label=r'$\rho$')
-        has_nl = True
-    if 'e_2_delay' in df.columns:
-        axs[3, 1].plot(df['time'], df['e_2_delay'], color='saddlebrown', linestyle='-.', linewidth=1.5, label=r'$e_2(t-L)$')
-        has_nl = True
-    if 'e_3_delay' in df.columns:
-        axs[3, 1].plot(df['time'], df['e_3_delay'], color='darkcyan', linestyle='-.', linewidth=1.5, label=r'$e_3(t-L)$')
-        has_nl = True
-
-    if has_nl:
-        axs[3, 1].axhline(0, color='gray', linestyle=':', linewidth=1)
-        axs[3, 1].set_title('Nonlinear / Delayed Error Terms over Time')
-        axs[3, 1].set_xlabel('Time [s]')
-        axs[3, 1].set_ylabel('Value')
-        axs[3, 1].set_ylim(-1, 1)
-        axs[3, 1].grid(True, linestyle=':', alpha=0.7)
-        axs[3, 1].legend(ncol=2)
-    else:
-        axs[3, 1].set_axis_off()
-
-    # --- 5行目左: 瞬時予測誤差 (Innovation) の移動RMS ---
+    # 2行目左: 瞬時予測誤差 (Innovation) の移動RMS
     if 'rls_innovation' in df.columns:
         window_size = 200 if len(df) >= 200 else max(1, len(df))
         rmse_series = np.sqrt(
             (df['rls_innovation'] ** 2).rolling(window=window_size, min_periods=1).mean()
         )
-        axs[4, 0].plot(
+        axs2[1, 0].plot(
             df['time'], rmse_series, color='purple', linewidth=2,
             label=f'Innovation Moving RMSE (window={window_size})')
-        axs[4, 0].set_title('RLS Innovation Moving RMSE over Time')
-        axs[4, 0].set_xlabel('Time [s]')
-        axs[4, 0].set_ylabel('RMSE [rad]')
-        axs[4, 0].set_ylim(0, 1)
-        axs[4, 0].grid(True, linestyle=':', alpha=0.7)
-        axs[4, 0].legend()
+        axs2[1, 0].set_title('RLS Innovation Moving RMSE over Time')
+        axs2[1, 0].set_xlabel('Time [s]')
+        axs2[1, 0].set_ylabel('RMSE [rad]')
+        axs2[1, 0].set_ylim(0, 1)
+        axs2[1, 0].grid(True, linestyle=':', alpha=0.7)
+        axs2[1, 0].legend()
     else:
-        axs[4, 0].text(
+        axs2[1, 0].text(
             0.5, 0.5, 'rls_innovation column not available',
             ha='center', va='center')
-        axs[4, 0].set_axis_off()
+        axs2[1, 0].set_axis_off()
 
-    # --- 5行目右: 共分散行列の対角成分 P_ii の個別推移 ---
+    # 2行目右: 共分散行列の対角成分 P_ii の個別推移
     p_diag_columns = [col for col in df.columns if col.startswith('rls_P_')]
     if p_diag_columns:
         for col in p_diag_columns:
@@ -261,31 +222,44 @@ def plot_single_csv(csv_path: Path, output_image_path: Path = None, show: bool =
             theta_label = PARAM_LABEL_MAP.get(theta_key, col)
             p_label = theta_label.replace(r'\hat{\theta}', 'P') if r'\hat{\theta}' in theta_label else col
             vals = np.maximum(df[col].to_numpy(dtype=float), 1e-12)
-            axs[4, 1].semilogy(df['time'], vals, label=p_label)
-        axs[4, 1].set_title('RLS Covariance Diagonal Elements $P_{ii}$ (Log scale)')
-        axs[4, 1].set_xlabel('Time [s]')
-        axs[4, 1].set_ylabel('$P_{ii}$ (log scale)')
-        axs[4, 1].grid(True, which='both', linestyle=':', alpha=0.7)
-        axs[4, 1].legend(ncol=2, fontsize=9)
+            axs2[1, 1].semilogy(df['time'], vals, label=p_label)
+        axs2[1, 1].set_title('RLS Covariance Diagonal Elements $P_{ii}$ (Log scale)')
+        axs2[1, 1].set_xlabel('Time [s]')
+        axs2[1, 1].set_ylabel('$P_{ii}$ (log scale)')
+        axs2[1, 1].grid(True, which='both', linestyle=':', alpha=0.7)
+        axs2[1, 1].legend(ncol=2, fontsize=8.5)
     else:
-        axs[4, 1].text(
+        axs2[1, 1].text(
             0.5, 0.5, 'RLS covariance diagonal columns not available',
             ha='center', va='center')
-        axs[4, 1].set_axis_off()
+        axs2[1, 1].set_axis_off()
 
     plt.tight_layout()
-    fig.subplots_adjust(top=0.96, hspace=0.35)
+    fig2.subplots_adjust(top=0.91, hspace=0.32, wspace=0.22)
 
+    # 保存パスの決定
     if output_image_path is None:
-        output_image_path = csv_path.parent / f"result_plots_{csv_path.stem}.png"
+        base_dir = csv_path.parent
+        base_stem = f"result_plots_{csv_path.stem}"
+        suffix = ".png"
+    else:
+        base_dir = output_image_path.parent
+        base_stem = output_image_path.stem
+        suffix = output_image_path.suffix or ".png"
 
-    plt.savefig(output_image_path, dpi=300, bbox_inches='tight')
-    print(f"[Success] 保存完了: {output_image_path}")
+    out_path_1 = base_dir / f"{base_stem}_1{suffix}"
+    out_path_2 = base_dir / f"{base_stem}_2{suffix}"
+
+    fig1.savefig(out_path_1, dpi=300, bbox_inches='tight')
+    fig2.savefig(out_path_2, dpi=300, bbox_inches='tight')
+    print(f"[Success] 保存完了 (1/2): {out_path_1}")
+    print(f"[Success] 保存完了 (2/2): {out_path_2}")
 
     if show:
         plt.show()
     else:
-        plt.close(fig)
+        plt.close(fig1)
+        plt.close(fig2)
 
     return True
 
@@ -331,7 +305,7 @@ def main():
             success_count += 1
 
     print("\n" + "=" * 50)
-    print(f"=== 完了: {success_count} / {len(csv_files)} 件の画像を生成しました ===")
+    print(f"=== 完了: {success_count} / {len(csv_files)} 件のCSVについて各2枚の画像を生成しました ===")
     print("=" * 50)
 
 
