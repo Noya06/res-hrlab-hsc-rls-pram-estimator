@@ -25,7 +25,6 @@ public:
     declare_parameter<double>("max_target_roll", 1.0);
     declare_parameter<double>("ioc_gain", 1.0);
     declare_parameter<double>("rls_gain", 1.0);
-    declare_parameter<bool>("invert_steering", false);
 
     std::vector<int64_t> feature_indices;
     std::vector<double> feature_scales;
@@ -38,7 +37,6 @@ public:
     get_parameter("max_target_roll", max_target_roll_);
     get_parameter("ioc_gain", ioc_gain_);
     get_parameter("rls_gain", rls_gain_);
-    get_parameter("invert_steering", invert_steering_);
     if (max_target_roll_ <= 0.0 || ioc_gain_ < 0.0 || rls_gain_ < 0.0) {
       throw std::invalid_argument(
         "max_target_roll must be positive and ioc_gain/rls_gain must be non-negative");
@@ -95,7 +93,7 @@ public:
     joystick_y_ = msg->data[1];
     const double normalized = std::clamp(
       (msg->data[1] - joystick_center_) / joystick_max_deviation_, -1.0, 1.0);
-    phi_hum_ = (invert_steering_ ? -1.0 : 1.0) * normalized * max_roll_rad_;
+    phi_hum_ = normalized * max_roll_rad_;
     joystick_received_ = true;
   }
 
@@ -216,7 +214,6 @@ private:
   double max_target_roll_{1.0};
   double ioc_gain_{1.0};
   double rls_gain_{1.0};
-  bool invert_steering_{false};
   bool theta_received_{false};
   bool joystick_received_{false};
   double phi_hum_{0.0};

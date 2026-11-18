@@ -16,7 +16,7 @@ def generate_launch_description():
         'steps', default_value='10000', description='総シミュレーションステップ数'
     )
     k2_arg = DeclareLaunchArgument('k_2', default_value='1.0', description='IOC制御ゲイン k2')
-    k3_arg = DeclareLaunchArgument('k_3', default_value='0.05', description='IOC制御ゲイン k3')
+    k3_arg = DeclareLaunchArgument('k_3', default_value='0.5', description='IOC制御ゲイン k3')
     ioc_alpha_arg = DeclareLaunchArgument(
         'ioc_alpha',
         default_value='0.05',
@@ -82,11 +82,6 @@ def generate_launch_description():
         default_value='1.0',
         description='ジョイスティック左右端での最大旋回入力 [rad/s相当]',
     )
-    invert_steering_arg = DeclareLaunchArgument(
-        'invert_steering',
-        default_value='true',
-        description='ジョイスティック左右軸と旋回方向を反転するか',
-    )
     rls_csv_path_arg = DeclareLaunchArgument(
         'rls_csv_path', default_value='', description='RLSオフライン推定に使用するCSV',
     )
@@ -108,15 +103,15 @@ def generate_launch_description():
     feature_settings = [
         # (特徴量名,     有効フラグ, 列index, スケール, パラメータ表示名)
         ('e2',           False,        4,       1.0,     'rls_theta_e2'),
-        ('e3',           False,        5,       1.0,     'rls_theta_e3'),
-        ('e2_abs_e2',    True,       12,       1.0,     'rls_theta_e2_abs_e2'),
-        ('e3_abs_e3',    True,       13,       1.0,     'rls_theta_e3_abs_e3'),
-        ('e2_abs_e3',    False,       14,       1.0,     'rls_theta_e2_abs_e3'),
-        ('abs_e2_e3',    False,       15,       1.0,     'rls_theta_abs_e2_e3'),
-        ('bias',         False,       16,       1.0,     'rls_theta_bias'),
-        ('rho',          False,       17,       1.0,     'rls_theta_rho'),
-        ('e2_delay',     False,       18,       1.0,     'rls_theta_e2_delay'),
-        ('e3_delay',     False,       19,       1.0,     'rls_theta_e3_delay'),
+        ('e3',           False,       5,       1.0,     'rls_theta_e3'),
+        ('e2_abs_e2',    False,       12,      1.0,     'rls_theta_e2_abs_e2'),
+        ('e3_abs_e3',    False,       13,      1.0,     'rls_theta_e3_abs_e3'),
+        ('e2_abs_e3',    True,       14,      1.0,     'rls_theta_e2_abs_e3'),
+        ('abs_e2_e3',    True,       15,      1.0,     'rls_theta_abs_e2_e3'),
+        ('bias',         False,       16,      1.0,     'rls_theta_bias'),
+        ('rho',          False,       17,      1.0,     'rls_theta_rho'),
+        ('e2_delay',     False,       18,      1.0,     'rls_theta_e2_delay'),
+        ('e3_delay',     False,       19,      1.0,     'rls_theta_e3_delay'),
     ]
 
     # 有効化された特徴量のみを自動抽出
@@ -151,7 +146,6 @@ def generate_launch_description():
             'max_deviation_B': LaunchConfiguration('max_deviation_B'),
             'max_roll_rad': LaunchConfiguration('max_roll_rad'),
             'max_control_roll': LaunchConfiguration('max_roll_rad'),
-            'invert_steering': LaunchConfiguration('invert_steering'),
             'delay_cycles_L': delay_cycles_L,
         }],
         output='screen'
@@ -252,7 +246,6 @@ def generate_launch_description():
             'max_target_roll': LaunchConfiguration('max_roll_rad'),
             'ioc_gain': LaunchConfiguration('ioc_gain'),
             'rls_gain': LaunchConfiguration('rls_gain'),
-            'invert_steering': LaunchConfiguration('invert_steering'),
         }],
         output='screen',
     )
@@ -276,7 +269,6 @@ def generate_launch_description():
         override_constant_forward_speed_arg,
         max_deviation_b_arg,
         max_roll_rad_arg,
-        invert_steering_arg,
         rls_csv_path_arg,
         rls_process_csv_arg,
         ioc_calculator_node,

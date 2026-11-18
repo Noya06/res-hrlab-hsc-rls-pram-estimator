@@ -133,7 +133,8 @@ private:
     // パラメータを動的に取得（ノード実行中の変更にも対応）
     this->get_parameter("override_constant_forward_speed", override_constant_forward_speed_);
 
-    const double normalized_y = apply_deadzone((raw_y_ - axis_center_) / axis_scale_);
+    // ロボット座標系（左旋回=正, 右旋回=負）に合わせるため左右軸を常に反転
+    const double normalized_y = -apply_deadzone((raw_y_ - axis_center_) / axis_scale_);
 
     auto state_msg = std_msgs::msg::Float64MultiArray();
     state_msg.data.resize(6);
