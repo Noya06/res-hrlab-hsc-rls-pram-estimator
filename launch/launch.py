@@ -102,16 +102,16 @@ def generate_launch_description():
     # -------------------------------------------------------------
     feature_settings = [
         # (特徴量名,     有効フラグ, 列index, スケール, パラメータ表示名)
-        ('e2',           False,        4,       1.0,     'rls_theta_e2'),
-        ('e3',           False,       5,       1.0,     'rls_theta_e3'),
-        ('e2_abs_e2',    False,       12,      1.0,     'rls_theta_e2_abs_e2'),
-        ('e3_abs_e3',    False,       13,      1.0,     'rls_theta_e3_abs_e3'),
+        ('e2',           True,        4,       1.0,     'rls_theta_e2'),
+        ('e3',           True,       5,       1.0,     'rls_theta_e3'),
+        ('e2_abs_e2',    True,       12,      1.0,     'rls_theta_e2_abs_e2'),
+        ('e3_abs_e3',    True,       13,      1.0,     'rls_theta_e3_abs_e3'),
         ('e2_abs_e3',    True,       14,      1.0,     'rls_theta_e2_abs_e3'),
         ('abs_e2_e3',    True,       15,      1.0,     'rls_theta_abs_e2_e3'),
-        ('bias',         False,       16,      1.0,     'rls_theta_bias'),
-        ('rho',          False,       17,      1.0,     'rls_theta_rho'),
-        ('e2_delay',     False,       18,      1.0,     'rls_theta_e2_delay'),
-        ('e3_delay',     False,       19,      1.0,     'rls_theta_e3_delay'),
+        ('bias',         True,       16,      1.0,     'rls_theta_bias'),
+        ('rho',          True,       17,      1.0,     'rls_theta_rho'),
+        ('e2_delay',     True,       18,      1.0,     'rls_theta_e2_delay'),
+        ('e3_delay',     True,       19,      1.0,     'rls_theta_e3_delay'),
     ]
 
     # 有効化された特徴量のみを自動抽出

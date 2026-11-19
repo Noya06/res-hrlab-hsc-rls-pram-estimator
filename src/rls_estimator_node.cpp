@@ -58,6 +58,9 @@ public:
       prediction += feature_vector[i] * theta_[i];
     }
     innovation_ = y - prediction;
+    sum_sq_innovation_ += innovation_ * innovation_;
+    sample_count_++;
+    rmse_ = std::sqrt(sum_sq_innovation_ / static_cast<double>(sample_count_));
     return theta_;
   }
 
@@ -92,6 +95,9 @@ public:
     }
 
     innovation_ = y - prediction;
+    sum_sq_innovation_ += innovation_ * innovation_;
+    sample_count_++;
+    rmse_ = std::sqrt(sum_sq_innovation_ / static_cast<double>(sample_count_));
 
     for (std::size_t i = 0; i < n; ++i) {
       theta_[i] += gain[i] * innovation_;
@@ -120,6 +126,7 @@ public:
 
   const std::vector<double> & parameters() const noexcept { return theta_; }
   double innovation() const noexcept { return innovation_; }
+  double rmse() const noexcept { return rmse_; }
   std::vector<double> diagonal_P() const
   {
     std::vector<double> diag(covariance_.size(), 0.0);
@@ -134,6 +141,9 @@ private:
   std::vector<std::vector<double>> covariance_;
   double forgetting_factor_;
   double innovation_{0.0};
+  double sum_sq_innovation_{0.0};
+  std::size_t sample_count_{0};
+  double rmse_{0.0};
 };
 
 class RlsEstimatorNode final : public rclcpp::Node
@@ -297,8 +307,9 @@ private:
         : estimator_->evaluate(phi_ref, phi_src, features);
       std_msgs::msg::Float64MultiArray msg;
       msg.data = theta;
-      // 診断情報（瞬時予測誤差 innovation、共分散行列の対角成分 P_ii）を末尾に追加
+      // 診断情報（瞬時予測誤差 innovation、オンラインRMSE、共分散行列の対角成分 P_ii）を末尾に追加
       msg.data.push_back(estimator_->innovation());
+      msg.data.push_back(estimator_->rmse());
       const auto diag_p = estimator_->diagonal_P();
       msg.data.insert(msg.data.end(), diag_p.begin(), diag_p.end());
       theta_pub_->publish(msg);
@@ -353,7 +364,7 @@ private:
       }
       output << "sample";
       for (const auto & name : parameter_names_) output << "," << name;
-      output << ",rls_innovation";
+      output << ",rls_innovation,rls_rmse";
       for (const auto & name : parameter_names_) {
         if (name.rfind("rls_theta_", 0) == 0) {
           output << ",rls_P_" << name.substr(10);
@@ -391,6 +402,7 @@ private:
           output << sample++;
           for (const auto value : theta) output << "," << value;
           output << "," << estimator_->innovation();
+          output << "," << estimator_->rmse();
           for (const auto value : estimator_->diagonal_P()) output << "," << value;
           output << "\n";
         }

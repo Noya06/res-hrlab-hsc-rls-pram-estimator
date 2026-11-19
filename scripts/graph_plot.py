@@ -182,24 +182,32 @@ else:
         ha='center', va='center')
     axs2[0, 1].set_axis_off()
 
-# --- 2行目左: 瞬時予測誤差 (Innovation) の移動RMS ---
-if 'rls_innovation' in df.columns:
-    window_size = 200 if len(df) >= 200 else max(1, len(df))
-    rmse_series = np.sqrt(
-        (df['rls_innovation'] ** 2).rolling(window=window_size, min_periods=1).mean()
-    )
-    axs2[1, 0].plot(
-        df['time'], rmse_series, color='purple', linewidth=2,
-        label=f'Innovation Moving RMSE (window={window_size})')
-    axs2[1, 0].set_title('RLS Innovation Moving RMSE over Time')
+# --- 2行目左: 予測誤差 (Innovation) と RMSE ---
+has_innovation = 'rls_innovation' in df.columns
+has_rmse = 'rls_rmse' in df.columns
+
+if has_innovation or has_rmse:
+    if has_rmse:
+        axs2[1, 0].plot(
+            df['time'], df['rls_rmse'], color='blue', linewidth=2,
+            label=r'Online Cumulative RMSE ($\sqrt{\frac{1}{N}\sum (y-\xi^T\theta)^2}$)')
+    if has_innovation:
+        window_size = 200 if len(df) >= 200 else max(1, len(df))
+        moving_rmse = np.sqrt(
+            (df['rls_innovation'] ** 2).rolling(window=window_size, min_periods=1).mean()
+        )
+        axs2[1, 0].plot(
+            df['time'], moving_rmse, color='purple', linestyle='--', linewidth=1.5,
+            label=f'Moving RMSE (window={window_size})')
+    axs2[1, 0].set_title('RLS Prediction Error RMSE over Time')
     axs2[1, 0].set_xlabel('Time [s]')
     axs2[1, 0].set_ylabel('RMSE [rad]')
     axs2[1, 0].set_ylim(0, 1)
     axs2[1, 0].grid(True, linestyle=':', alpha=0.7)
-    axs2[1, 0].legend()
+    axs2[1, 0].legend(fontsize=9)
 else:
     axs2[1, 0].text(
-        0.5, 0.5, 'rls_innovation column is not available in this CSV',
+        0.5, 0.5, 'RLS error columns not available in this CSV',
         ha='center', va='center')
     axs2[1, 0].set_axis_off()
 

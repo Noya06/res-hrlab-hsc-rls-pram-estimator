@@ -120,7 +120,7 @@ private:
 
     const std::size_t n = static_cast<std::size_t>(rls_parameter_count_);
     const std::size_t theta_end = 11 + n;
-    const std::size_t p_diag_start = theta_end + 9;
+    const std::size_t p_diag_start = theta_end + 10;
     const std::size_t expected_size = p_diag_start + n;
     if (msg->data.size() < expected_size) {
       RCLCPP_WARN_THROTTLE(
@@ -155,6 +155,7 @@ private:
     row.e_2_delay   = msg->data[theta_end + 6];
     row.e_3_delay   = msg->data[theta_end + 7];
     row.rls_innovation = msg->data[theta_end + 8];
+    row.rls_rmse       = msg->data[theta_end + 9];
     row.rls_p_diag.assign(msg->data.begin() + p_diag_start, msg->data.begin() + expected_size);
 
     records_.push_back(row);
@@ -240,7 +241,7 @@ private:
     for (std::size_t i = 0; i < parameter_names_.size(); ++i) {
       file << "," << parameter_names_[i];
     }
-    file << ",e_2_abs_e_2,e_3_abs_e_3,e_2_abs_e_3,abs_e_2_e_3,bias_term,rho,e_2_delay,e_3_delay,rls_innovation";
+    file << ",e_2_abs_e_2,e_3_abs_e_3,e_2_abs_e_3,abs_e_2_e_3,bias_term,rho,e_2_delay,e_3_delay,rls_innovation,rls_rmse";
     for (const auto & name : parameter_names_) {
       if (name.rfind("rls_theta_", 0) == 0) {
         file << ",rls_P_" << name.substr(10);
@@ -262,7 +263,7 @@ private:
       file << "," << r.e_2_abs_e_2 << "," << r.e_3_abs_e_3
            << "," << r.e_2_abs_e_3 << "," << r.abs_e_2_e_3 << "," << r.bias_term
            << "," << r.rho << "," << r.e_2_delay << "," << r.e_3_delay
-           << "," << r.rls_innovation;
+           << "," << r.rls_innovation << "," << r.rls_rmse;
       for (const auto value : r.rls_p_diag) {
         file << "," << value;
       }
@@ -314,6 +315,7 @@ private:
     double e_2_abs_e_2, e_3_abs_e_3, e_2_abs_e_3, abs_e_2_e_3, bias_term, rho;
     double e_2_delay, e_3_delay;
     double rls_innovation;
+    double rls_rmse{0.0};
     std::vector<double> rls_parameters;
     std::vector<double> rls_p_diag;
   };

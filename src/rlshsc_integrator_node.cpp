@@ -109,11 +109,17 @@ private:
       return;
     }
     theta_.assign(msg->data.begin(), msg->data.begin() + n);
-    if (msg->data.size() >= 2 * n + 1) {
+    if (msg->data.size() >= 2 * n + 2) {
       rls_innovation_ = msg->data[n];
+      rls_rmse_ = msg->data[n + 1];
+      rls_p_diag_.assign(msg->data.begin() + n + 2, msg->data.begin() + 2 * n + 2);
+    } else if (msg->data.size() >= 2 * n + 1) {
+      rls_innovation_ = msg->data[n];
+      rls_rmse_ = 0.0;
       rls_p_diag_.assign(msg->data.begin() + n + 1, msg->data.begin() + 2 * n + 1);
     } else {
       rls_innovation_ = 0.0;
+      rls_rmse_ = 0.0;
       rls_p_diag_.assign(n, 0.0);
     }
     theta_received_ = true;
@@ -190,6 +196,7 @@ private:
     log_msg.data.push_back(e2_delay);
     log_msg.data.push_back(e3_delay);
     log_msg.data.push_back(rls_innovation_);
+    log_msg.data.push_back(rls_rmse_);
     log_msg.data.insert(log_msg.data.end(), rls_p_diag_.begin(), rls_p_diag_.end());
     log_pub_->publish(log_msg);
 
@@ -221,6 +228,7 @@ private:
   double joystick_y_{0.0};
   std::vector<double> theta_;
   double rls_innovation_{0.0};
+  double rls_rmse_{0.0};
   std::vector<double> rls_p_diag_;
   rclcpp::Subscription<std_msgs::msg::Float64MultiArray>::SharedPtr theta_sub_;
   rclcpp::Subscription<std_msgs::msg::Float64MultiArray>::SharedPtr joystick_sub_;
