@@ -97,27 +97,29 @@ def generate_launch_description():
 
     # -------------------------------------------------------------
     # RLS特徴量の使用設定（用いる / 用いないの切り替え）
-    # enable: True (使用する) / False (使用しない)
-    # scale:  正規化スケール値（特徴量をこの値で割って正規化、通常1.0）
+    # enable:  True (使用する) / False (使用しない)
+    # scale:   正規化スケール値（特徴量をこの値で割って正規化、通常1.0）
+    # initial: 重みパラメータ theta の初期値 (デフォルト 0.0)
     # -------------------------------------------------------------
     feature_settings = [
-        # (特徴量名,     有効フラグ, 列index, スケール, パラメータ表示名)
-        ('e2',           True,        4,       1.0,     'rls_theta_e2'),
-        ('e3',           True,       5,       1.0,     'rls_theta_e3'),
-        ('e2_abs_e2',    True,       12,      1.0,     'rls_theta_e2_abs_e2'),
-        ('e3_abs_e3',    True,       13,      1.0,     'rls_theta_e3_abs_e3'),
-        ('e2_abs_e3',    True,       14,      1.0,     'rls_theta_e2_abs_e3'),
-        ('abs_e2_e3',    True,       15,      1.0,     'rls_theta_abs_e2_e3'),
-        ('bias',         True,       16,      1.0,     'rls_theta_bias'),
-        ('rho',          True,       17,      1.0,     'rls_theta_rho'),
-        ('e2_delay',     True,       18,      1.0,     'rls_theta_e2_delay'),
-        ('e3_delay',     True,       19,      1.0,     'rls_theta_e3_delay'),
+        # (特徴量名,     有効フラグ, 列index, スケール, パラメータ表示名,    初期値)
+        ('e2',           True,        4,       1.0,     'rls_theta_e2',        0.0),
+        ('e3',           True,        5,       1.0,     'rls_theta_e3',       0.0),
+        ('e2_abs_e2',    True,       12,       1.0,     'rls_theta_e2_abs_e2', 0.0),
+        ('e3_abs_e3',    True,       13,       1.0,     'rls_theta_e3_abs_e3', 0.0),
+        ('e2_abs_e3',    True,       14,       1.0,     'rls_theta_e2_abs_e3',  0.0),
+        ('abs_e2_e3',    True,       15,       1.0,     'rls_theta_abs_e2_e3',  0.0),
+        ('bias',         True,       16,       1.0,     'rls_theta_bias',      0.0),
+        ('rho',          True,       17,       1.0,     'rls_theta_rho',       0.0),
+        ('e2_delay',     True,       18,       1.0,     'rls_theta_e2_delay',  0.0),
+        ('e3_delay',     True,       19,       1.0,     'rls_theta_e3_delay',   0.0),
     ]
 
     # 有効化された特徴量のみを自動抽出
     active_feature_indices = [item[2] for item in feature_settings if item[1]]
     active_feature_scales = [item[3] for item in feature_settings if item[1]]
     active_parameter_names = [item[4] for item in feature_settings if item[1]]
+    active_initial_parameters = [float(item[5]) for item in feature_settings if item[1]]
     active_parameter_count = len(active_feature_indices)
 
     if active_parameter_count == 0:
@@ -217,6 +219,7 @@ def generate_launch_description():
             'parameter_count': active_parameter_count,
             'feature_indices': active_feature_indices,
             'feature_scales': active_feature_scales,
+            'initial_parameters': active_initial_parameters,
             'parameter_names': active_parameter_names,
             'phi_ref_index': 11,
             'phi_src_index': 10,

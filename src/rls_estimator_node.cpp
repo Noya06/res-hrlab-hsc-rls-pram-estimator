@@ -261,6 +261,17 @@ public:
       oss << "]";
       RCLCPP_INFO(this->get_logger(), "%s", oss.str().c_str());
     }
+    {
+      std::ostringstream oss;
+      oss << "特徴量初期値: [";
+      const auto & init_theta = estimator_->parameters();
+      for (std::size_t i = 0; i < init_theta.size(); ++i) {
+        if (i > 0) oss << ", ";
+        oss << init_theta[i];
+      }
+      oss << "]";
+      RCLCPP_INFO(this->get_logger(), "%s", oss.str().c_str());
+    }
     RCLCPP_INFO(
       this->get_logger(), "RLSパラメータ更新: 待機中（トリガーを引いている間のみ更新します）");
   }
